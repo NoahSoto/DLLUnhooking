@@ -123,6 +123,8 @@ void printByteArray(const unsigned char* array, size_t size) {
 
 
 
+
+
 /* Havent converted to unhooked syscalls yet - on the to do list also.. but to see how I've demonstrated the capability to do so with hollowProcess func
 void detectDebug() {
     // Calling NtQueryInformationProcess with the 'ProcessDebugPort' flag
