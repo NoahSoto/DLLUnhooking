@@ -82,13 +82,15 @@ THis is an example of an unhooked systemcall.  In a hooked systemcall the struct
 jmp <edr_memory_space_for_analysis>
 mov r10,rcx
 mov eax,SSN
-...
-...
 syscall
 ret
 ```
 
-How do we avoid this?
+And so if we were trying to automate searching for a hooked systemcall we could look at the first couple of bytes and compare.
+
+In the debugger screenshot we can see that our unhooked function has a the following byte sequence to represent `mov r10, rcx`, `4c 8B D1`. We can compare that to the opcode of a `jmp` instruction which is `e9` followed by some general bytes leading to a memory address space, we could automate finding which functions are hooked. Anyways thats besides the point.
+
+Without going through the pain of indirect/direct systemcalls how do we avoid this?
 
 ## DLL Unhooking!
 
@@ -112,6 +114,13 @@ There are pros and cons to both methods. Just in my own experience I think conce
 
 ## Resources:
 I cannot thank these resources enough for providing me with inspiration and interest in these topics.  Additionally, they have provided fantastic assistance when I find myself stuck! 
+
 MALDEV ACADEMY
 https://unprotect.it/technique/dll-unhooking/
 https://www.ired.team/offensive-security/defense-evasion/how-to-unhook-a-dll-using-c++
+https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-nt-and-zw-versions-of-the-native-system-services-routines
+https://redops.at/en/blog/direct-syscalls-vs-indirect-syscalls
+https://stackoverflow.com/questions/72413668/dll-are-loaded-at-the-same-address-why-is-it-designed-like-that
+https://mohamed-fakroud.gitbook.io/red-teamings-dojo/windows-internals/peb
+https://www.ired.team/offensive-security/defense-evasion/detecting-hooked-syscall-functions
+
