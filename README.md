@@ -72,6 +72,7 @@ mov eax,SSN
 syscall
 ret
 ```
+The SSN is used to denote which systemcall is being ran.  These numbers change based on the Major and Minor version of Windows that you're using and increase sequentially through the library.  In this example 0 is `ZwAccessCheck`, 1 is `ZwWorkerFactoryReady` ,and so on.  `Nt` systemcalls are used to denote userland systemcalls while `Zw` is used to denote kernel mode systemcalls.  The functionality is nearly the same the only real difference is that in `Nt` systemcalls, since they come from userland, input parameters are treated as `untrusted`, and thus tested and validated prior to use.  That does not happen for `Zw` based systemcalls and they are kernel based and typically originate from things like drivers.
 
 So we can see the general structure of a system call repeated in all 3 instances here.
 
