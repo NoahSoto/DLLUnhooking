@@ -111,7 +111,6 @@ So essentially what we need to do is:
 
 There are pros and cons to both methods. Just in my own experience I think conceptually speaking indirect and direct systemcalls were actually a little bit easier for me to understand, but took a lot longer to implement.  The reason why I'm writing all of this is actually because it was so confusing to me at first that I really felt like I needed to do something more to solidify my understanding. I think DLL Unhooking is easier, but as mentioned in steps 6 and 8, I think needing the change the protection of NTDLL .text section is defintely pretty telling that a process could be malicious, and would be easier to detect then a non-direct systemcall implementation.  
 
-*Note*: Theres some code in the repo that I'm not actively using at the moment.  I was initially setting up for a systemcall based implementaiton but then realised the whole point of this was to 
 
 what a great ood day 🤷 🌸
 
