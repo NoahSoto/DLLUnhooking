@@ -409,8 +409,8 @@ void CreateSuspendedProcess(IN char* processName, IN wchar_t* moduuleName, OUT P
         NULL,                 // Command line arguments
         NULL,                 // Process handle not inheritable
         NULL,                 // Thread handle not inheritable
-        FALSE,                // Set handle inheritance to FALSE
-        /*DEBUG_PROCESS*/CREATE_SUSPENDED,     // Creation flags (create in suspended state), i like testing in suspended so i can debug but for dev use debug.
+        PROCESS_ALL_ACCESS,                // Set handle inheritance to FALSE
+        CREATE_SUSPENDED,     // Creation flags (create in suspended state), i like testing in suspended so i can debug but for dev use debug.
         NULL,                 // Use parent's environment block
         NULL,                 // Use parent's starting directory
         &si,                  // Pointer to STARTUPINFO structure
