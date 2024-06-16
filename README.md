@@ -116,6 +116,7 @@ what a great ood day 🤷 🌸
 I cannot thank these resources enough for providing me with inspiration and interest in these topics.  Additionally, they have provided fantastic assistance when I find myself stuck! 
 
 MALDEV ACADEMY
+
 https://unprotect.it/technique/dll-unhooking/
 
 https://www.ired.team/offensive-security/defense-evasion/how-to-unhook-a-dll-using-c++
