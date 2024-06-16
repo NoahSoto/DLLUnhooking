@@ -9,7 +9,7 @@ Lets take a look at a basic windows syscall in assembly.
 
 Lets spin up a project in VS quickly and just take a look at the libraries their addresses, syscall structure, ect.
 
-![](Pasted%20image%2020240615213133.png)
+![](attachments/Pasted%20image%2020240615213133.png)
 
 ```c
 #include <windows.h>
