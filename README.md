@@ -1,11 +1,10 @@
 ## EDR Detection of API/Syscalls
 
-One common method of detecting syscall usage by various EDR solutions is to "hook" the the functions.  
+One common method of detecting syscall usage by various EDR solutions is to "hook" systemcalls.  
 
 How does this work, what does that even mean?
 
 Lets take a look at a basic windows syscall in assembly.
-
 
 Lets spin up a project in VS quickly and just take a look at the libraries their addresses, syscall structure, ect.
 
