@@ -19,7 +19,6 @@ typedef struct _SYSCALLS {
 
 SYSCALLS_STRUCT syscallsStruct = { 0 };
 
-
 //Maldev Academy Rc4
 BOOL Rc4EncryptionViSystemFunc032(IN PBYTE pRc4Key, IN PBYTE pPayloadData, IN DWORD dwRc4KeySize, IN DWORD sPayloadSize) {
 
