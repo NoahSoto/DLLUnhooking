@@ -111,16 +111,23 @@ So essentially what we need to do is:
 
 There are pros and cons to both methods. Just in my own experience I think conceptually speaking indirect and direct systemcalls were actually a little bit easier for me to understand, but took a lot longer to implement.  The reason why I'm writing all of this is actually because it was so confusing to me at first that I really felt like I needed to do something more to solidify my understanding. I think DLL Unhooking is easier, but as mentioned in steps 6 and 8, I think needing the change the protection of NTDLL .text section is defintely pretty telling that a process could be malicious, and would be easier to detect then a non-direct systemcall implementation.  
 
-
+what a great ood day 🤷 🌸
 ## Resources:
 I cannot thank these resources enough for providing me with inspiration and interest in these topics.  Additionally, they have provided fantastic assistance when I find myself stuck! 
 
 MALDEV ACADEMY
 https://unprotect.it/technique/dll-unhooking/
+
 https://www.ired.team/offensive-security/defense-evasion/how-to-unhook-a-dll-using-c++
+
 https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/using-nt-and-zw-versions-of-the-native-system-services-routines
+
 https://redops.at/en/blog/direct-syscalls-vs-indirect-syscalls
+
 https://stackoverflow.com/questions/72413668/dll-are-loaded-at-the-same-address-why-is-it-designed-like-that
+
 https://mohamed-fakroud.gitbook.io/red-teamings-dojo/windows-internals/peb
+
 https://www.ired.team/offensive-security/defense-evasion/detecting-hooked-syscall-functions
+
 
